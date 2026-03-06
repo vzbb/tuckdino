@@ -1,16 +1,12 @@
 "use client";
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 export function useLowFpsCamera(enabled: boolean) {
   const videoRef = useRef<HTMLVideoElement | null>(null);
   const streamRef = useRef<MediaStream | null>(null);
+  const canvasRef = useRef<HTMLCanvasElement | null>(null);
   const [ready, setReady] = useState(false);
-
-  const canvas = useMemo(() => {
-    const c = document.createElement("canvas");
-    return c;
-  }, []);
 
   useEffect(() => {
     let canceled = false;
@@ -43,7 +39,6 @@ export function useLowFpsCamera(enabled: boolean) {
         await v.play().catch(() => undefined);
         setReady(true);
       } catch (err) {
-        // eslint-disable-next-line no-console
         console.warn("Camera permission denied or unavailable:", err);
         setReady(false);
       }
@@ -53,6 +48,7 @@ export function useLowFpsCamera(enabled: boolean) {
       setReady(false);
       videoRef.current?.pause();
       videoRef.current = null;
+
       if (streamRef.current) {
         streamRef.current.getTracks().forEach((t) => t.stop());
         streamRef.current = null;
@@ -70,16 +66,22 @@ export function useLowFpsCamera(enabled: boolean) {
 
   const captureBase64Jpeg = (w = 160, h = 120, quality = 0.6) => {
     const v = videoRef.current;
-    if (!v || !ready) return null;
+    if (!v || !ready || typeof document === "undefined") return null;
 
+    if (!canvasRef.current) {
+      canvasRef.current = document.createElement("canvas");
+    }
+
+    const canvas = canvasRef.current;
     canvas.width = w;
     canvas.height = h;
+
     const ctx = canvas.getContext("2d");
     if (!ctx) return null;
 
     ctx.drawImage(v, 0, 0, w, h);
     const dataUrl = canvas.toDataURL("image/jpeg", quality);
-    // strip prefix: "data:image/jpeg;base64,"
+
     const idx = dataUrl.indexOf(",");
     return idx >= 0 ? dataUrl.slice(idx + 1) : null;
   };
