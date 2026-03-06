@@ -32,7 +32,12 @@ export function pcm16ToWavBlob(pcmBytes: Uint8Array, sampleRate: number, channel
   writeStr(view, 36, "data");
   view.setUint32(40, dataSize, true);
 
-  const blob = new Blob([header, pcmBytes], { type: "audio/wav" });
+  // Fix TS build issue by using plain ArrayBuffer-backed byte arrays
+  const headerBytes = new Uint8Array(header);
+  const pcmCopy = new Uint8Array(pcmBytes.length);
+  pcmCopy.set(pcmBytes);
+
+  const blob = new Blob([headerBytes, pcmCopy], { type: "audio/wav" });
   return blob;
 }
 
