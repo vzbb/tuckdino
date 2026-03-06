@@ -1,0 +1,12 @@
+Drop Quaternius assets here (NOT included in this repo).
+
+Expected (optional) paths (GLB/GLTF):
+- /public/assets/quaternius/baby_dino.glb
+- /public/assets/quaternius/village_hut.glb
+- /public/assets/quaternius/tent.glb
+
+If you don't add them, the game still runs using simple built-in fallback meshes.
+
+Notes:
+- Quaternius packs are usually FBX/BLEND. If needed, open in Blender and export to GLB.
+- Keep animations inside baby_dino.glb if available (Idle/Walk/Run/Jump etc).
