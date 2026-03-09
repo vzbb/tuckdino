@@ -45,8 +45,11 @@ function Lighting() {
   const ambient = 0.22 + sun * 0.45;
   const dir = 0.15 + sun * 1.05;
 
-  const sunPos: [number, number, number] =
-    phase === "night" ? [0, -1, 0] : [8, 10, 6];
+  // Smoother sun position based on daylight
+  // x: -8 (sunrise) to 8 (sunset), y: -1 (night) to 10 (noon), z: 6
+  const sunX = (dayLight - 0.5) * 16;
+  const sunY = phase === "night" ? -1.5 : sun * 10;
+  const sunPos: [number, number, number] = [sunX, sunY, 6];
 
   return (
     <>
@@ -77,17 +80,27 @@ function WorldGround() {
       }}
     >
       <planeGeometry args={[140, 140, 1, 1]} />
-      <meshStandardMaterial color={"#2b5a38"} roughness={1} />
+      <meshStandardMaterial color={"#2b5a38"} roughness={0.8} />
     </mesh>
   );
 }
 
 export function WorldScene() {
   const phase = useGameStore((s) => s.dayPhase);
+  const dayLight = useGameStore((s) => s.dayLight);
+
+  const fogColor = phase === "night" ? "#0a0a1a" : phase === "morning" ? "#ffecdb" : phase === "evening" ? "#ffae80" : "#d0f0ff";
+  const fogIntensity = phase === "night" ? 0.015 : 0.008;
 
   return (
     <group>
-      <Sky sunPosition={phase === "night" ? [0, -1, 0] : [3, 2, 1]} />
+      <fogExp2 attach="fog" args={[fogColor, fogIntensity]} />
+      
+      <Sky 
+        sunPosition={[(dayLight - 0.5) * 16, phase === "night" ? -1 : dayLight * 10, 6]} 
+        turbidity={0.1}
+        rayleigh={phase === "night" ? 0.1 : 0.5}
+      />
       {phase === "night" && <Stars radius={80} depth={40} count={1800} factor={3} />}
 
       <Lighting />

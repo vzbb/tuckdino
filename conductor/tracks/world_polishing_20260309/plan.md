@@ -3,9 +3,9 @@
 ## Phase 1: Environmental & Atmospheric Polish
 Goal: Elevate the visual quality and coherence of the 3D world.
 
-- [ ] Task: Audit existing lighting and materials in `WorldScene.tsx` and `WorldProps.tsx`.
-- [ ] Task: Refine Day/Night transition logic and skybox atmosphere in `useDayNightSync.ts`.
-- [ ] Task: Implement subtle environmental effects (e.g., wind in trees, campfire particle refinement).
+- [x] Task: Audit existing lighting and materials in `WorldScene.tsx` and `WorldProps.tsx`.
+- [x] Task: Refine Day/Night transition logic and skybox atmosphere in `useDayNightSync.ts`.
+- [x] Task: Implement subtle environmental effects (e.g., wind in trees, campfire particle refinement).
 - [ ] Task: Conductor - User Manual Verification 'Environmental & Atmospheric Polish' (Protocol in workflow.md)
 
 ## Phase 2: Engaging Dino Interactivity

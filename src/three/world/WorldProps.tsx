@@ -1,7 +1,9 @@
 "use client";
 
-import { Suspense } from "react";
+import { Suspense, useRef, useMemo } from "react";
 import { useGLTF } from "@react-three/drei";
+import { useFrame } from "@react-three/fiber";
+import * as THREE from "three";
 import { AssetBoundary } from "@/src/three/components/AssetBoundary";
 
 const HUT_GLB = "/assets/quaternius/village_hut.glb";
@@ -31,8 +33,19 @@ function HutModel() {
 }
 
 function Tree({ x, z }: { x: number; z: number }) {
+  const groupRef = useRef<THREE.Group>(null);
+  const randomOffset = useMemo(() => Math.random() * 10, []);
+
+  useFrame((state) => {
+    if (!groupRef.current) return;
+    const t = state.clock.elapsedTime + randomOffset;
+    // Gentle sway
+    groupRef.current.rotation.x = Math.sin(t * 0.5) * 0.03;
+    groupRef.current.rotation.z = Math.cos(t * 0.3) * 0.02;
+  });
+
   return (
-    <group position={[x, 0, z]}>
+    <group position={[x, 0, z]} ref={groupRef}>
       <mesh position={[0, 0.9, 0]} castShadow>
         <cylinderGeometry args={[0.18, 0.25, 1.8, 10]} />
         <meshStandardMaterial color={"#6b4b32"} roughness={0.95} />
@@ -41,6 +54,56 @@ function Tree({ x, z }: { x: number; z: number }) {
         <coneGeometry args={[1.1, 2.2, 10]} />
         <meshStandardMaterial color={"#2f7a4a"} roughness={0.95} />
       </mesh>
+    </group>
+  );
+}
+
+function Campfire() {
+  const lightRef = useRef<THREE.PointLight>(null);
+  const flameRef = useRef<THREE.Mesh>(null);
+
+  useFrame((state) => {
+    if (lightRef.current) {
+      // Flickering light
+      lightRef.current.intensity = 0.6 + Math.random() * 0.4;
+    }
+    if (flameRef.current) {
+      // Gentle pulsing flame
+      const s = 1.0 + Math.sin(state.clock.elapsedTime * 10) * 0.05;
+      flameRef.current.scale.set(s, s, s);
+    }
+  });
+
+  return (
+    <group position={[10, 0, 10]}>
+      {/* stones */}
+      {Array.from({ length: 10 }).map((_, i) => (
+        <mesh
+          key={`campstone-${i}`}
+          position={[
+            Math.cos((i / 10) * Math.PI * 2) * 1.2,
+            0.06,
+            Math.sin((i / 10) * Math.PI * 2) * 1.2,
+          ]}
+          castShadow
+        >
+          <dodecahedronGeometry args={[0.22, 0]} />
+          <meshStandardMaterial color={"#6b6b6b"} roughness={1} />
+        </mesh>
+      ))}
+      {/* little flame */}
+      <mesh position={[0, 0.45, 0]} castShadow ref={flameRef}>
+        <coneGeometry args={[0.35, 0.95, 10]} />
+        <meshStandardMaterial color={"#ffbe6e"} emissive={"#ff7a2f"} emissiveIntensity={0.7} />
+      </mesh>
+      <pointLight 
+        ref={lightRef}
+        position={[0, 1.4, 0]} 
+        intensity={0.75} 
+        distance={16} 
+        decay={2} 
+        color={"#ffb36e"} 
+      />
     </group>
   );
 }
@@ -87,31 +150,8 @@ export function WorldProps() {
         />
       ))}
 
+      <Campfire />
 
-      {/* Campfire area (always present) */}
-      <group position={[10, 0, 10]}>
-        {/* stones */}
-        {Array.from({ length: 10 }).map((_, i) => (
-          <mesh
-            key={`campstone-${i}`}
-            position={[
-              Math.cos((i / 10) * Math.PI * 2) * 1.2,
-              0.06,
-              Math.sin((i / 10) * Math.PI * 2) * 1.2,
-            ]}
-            castShadow
-          >
-            <dodecahedronGeometry args={[0.22, 0]} />
-            <meshStandardMaterial color={"#6b6b6b"} roughness={1} />
-          </mesh>
-        ))}
-        {/* little flame */}
-        <mesh position={[0, 0.45, 0]} castShadow>
-          <coneGeometry args={[0.35, 0.95, 10]} />
-          <meshStandardMaterial color={"#ffbe6e"} emissive={"#ff7a2f"} emissiveIntensity={0.7} />
-        </mesh>
-        <pointLight position={[0, 1.4, 0]} intensity={0.75} distance={16} decay={2} color={"#ffb36e"} />
-      </group>
       {/* Soft hills */}
       {Array.from({ length: 18 }).map((_, i) => (
         <mesh
