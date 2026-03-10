@@ -16,6 +16,7 @@ function FollowCamera() {
   const camera = useThree((s) => s.camera);
   const playerPos = useGameStore((s) => s.playerPos);
   const playerRotation = useGameStore((s) => s.playerRotation);
+  const playerPitch = useGameStore((s) => s.playerPitch);
   const playerZoom = useGameStore((s) => s.playerZoom);
 
   const target = useMemo(() => new Vector3(), []);
@@ -25,16 +26,21 @@ function FollowCamera() {
     camera.position.set(playerPos.x, 1.4, playerPos.z);
     
     // Default FOV is usually 75. Scale it by zoom factor.
-    // Higher zoom factor = higher FOV = more zoomed out.
     if ("fov" in camera) {
       (camera as any).fov = 75 * playerZoom;
       (camera as any).updateProjectionMatrix();
     }
 
+    // Look target including pitch (vertical) and yaw (horizontal)
+    const cosPitch = Math.cos(playerPitch);
+    const sinPitch = Math.sin(playerPitch);
+    const cosYaw = Math.cos(playerRotation);
+    const sinYaw = Math.sin(playerRotation);
+
     target.set(
-      playerPos.x + Math.sin(playerRotation),
-      1.4,
-      playerPos.z + Math.cos(playerRotation)
+      playerPos.x + sinYaw * cosPitch,
+      1.4 + sinPitch,
+      playerPos.z + cosYaw * cosPitch
     );
     camera.lookAt(target);
   });
@@ -46,11 +52,14 @@ function Controls() {
   const { gl } = useThree();
   const setPlayerRotation = useGameStore((s) => s.setPlayerRotation);
   const playerRotation = useGameStore((s) => s.playerRotation);
+  const setPlayerPitch = useGameStore((s) => s.setPlayerPitch);
+  const playerPitch = useGameStore((s) => s.playerPitch);
   const setPlayerZoom = useGameStore((s) => s.setPlayerZoom);
   const playerZoom = useGameStore((s) => s.playerZoom);
 
   const isDragging = useRef(false);
   const lastX = useRef(0);
+  const lastY = useRef(0);
   const didMove = useRef(false);
   
   // Pinch zoom state
@@ -62,6 +71,7 @@ function Controls() {
     const onPointerDown = (e: PointerEvent) => {
       isDragging.current = true;
       lastX.current = e.clientX;
+      lastY.current = e.clientY;
       didMove.current = false;
     };
 
@@ -69,12 +79,22 @@ function Controls() {
       if (!isDragging.current) return;
       
       const deltaX = e.clientX - lastX.current;
-      if (Math.abs(deltaX) > 2) {
+      const deltaY = e.clientY - lastY.current;
+
+      if (Math.abs(deltaX) > 2 || Math.abs(deltaY) > 2) {
         didMove.current = true;
+        
+        // Horizontal pan (yaw)
         const newYaw = playerRotation - deltaX * 0.008;
         setPlayerRotation(newYaw);
+
+        // Vertical tilt (pitch) - clamped to prevent flipping
+        const newPitch = clamp(playerPitch - deltaY * 0.006, -Math.PI / 3, Math.PI / 3);
+        setPlayerPitch(newPitch);
       }
+
       lastX.current = e.clientX;
+      lastY.current = e.clientY;
     };
 
     const onPointerUp = () => {
@@ -126,7 +146,7 @@ function Controls() {
       canvas.removeEventListener("touchmove", onTouchMove);
       canvas.removeEventListener("touchend", onTouchEnd);
     };
-  }, [gl, playerRotation, setPlayerRotation, playerZoom, setPlayerZoom]);
+  }, [gl, playerRotation, setPlayerRotation, playerPitch, setPlayerPitch, playerZoom, setPlayerZoom]);
 
   return null;
 }

@@ -61,6 +61,7 @@ type GameState = {
   // Player movement
   playerPos: Vec3;
   playerRotation: number; // yaw in radians
+  playerPitch: number; // pitch in radians
   playerZoom: number; // 1.0 is default, higher is zoomed out
   playerTarget: Vec3 | null;
   moveSequenceId: number; // increments on each new target
@@ -68,6 +69,7 @@ type GameState = {
   // Dino
   dinoPos: Vec3;
   dinoScale: number;
+  dinoColor: string; // hex color
   dinoStats: {
     hunger: number; // 0..1
     cleanliness: number; // 0..1
@@ -115,12 +117,14 @@ type GameState = {
 
   setPlayerPos: (pos: Vec3) => void;
   setPlayerRotation: (yaw: number) => void;
+  setPlayerPitch: (pitch: number) => void;
   setPlayerZoom: (zoom: number) => void;
   setMoveTarget: (target: Vec3) => void;
   clearMoveTarget: () => void;
 
   setDinoPos: (pos: Vec3) => void;
   setDinoScale: (scale: number) => void;
+  setDinoColor: (color: string) => void;
   setDinoDirective: (d: DinoDirective) => void;
 
   openRadialMenu: () => void;
@@ -161,12 +165,14 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   playerPos: { x: 0, y: 0, z: 6 },
   playerRotation: 0,
+  playerPitch: 0,
   playerZoom: 1.25, // default slightly zoomed out
   playerTarget: null,
   moveSequenceId: 0,
 
   dinoPos: { x: 0, y: 0, z: 3.5 },
   dinoScale: 1,
+  dinoColor: "#7affc8", // default minty green
   dinoStats: {
     hunger: 0.8,
     cleanliness: 0.8,
@@ -214,6 +220,8 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   setPlayerRotation: (yaw) => set({ playerRotation: yaw }),
 
+  setPlayerPitch: (pitch) => set({ playerPitch: pitch }),
+
   setPlayerZoom: (zoom) => set({ playerZoom: zoom }),
 
   setMoveTarget: (target) => {
@@ -229,6 +237,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   setDinoPos: (pos) => set({ dinoPos: pos }),
 
   setDinoScale: (scale) => set({ dinoScale: scale }),
+
+  setDinoColor: (color) => set({ dinoColor: color }),
 
   setDinoDirective: (d) => set({ dinoDirective: d }),
 

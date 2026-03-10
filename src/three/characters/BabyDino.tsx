@@ -20,17 +20,18 @@ type Props = {
 };
 
 function FallbackDinoBody() {
+  const dinoColor = useGameStore((s) => s.dinoColor);
   return (
     <group>
       {/* body */}
       <mesh castShadow>
         <capsuleGeometry args={[0.45, 0.9, 8, 16]} />
-        <meshStandardMaterial color={"#7affc8"} roughness={0.85} />
+        <meshStandardMaterial color={dinoColor} roughness={0.85} />
       </mesh>
       {/* head */}
       <mesh position={[0, 0.7, 0.55]} castShadow>
         <sphereGeometry args={[0.38, 20, 20]} />
-        <meshStandardMaterial color={"#7affc8"} roughness={0.8} />
+        <meshStandardMaterial color={dinoColor} roughness={0.8} />
       </mesh>
       {/* eyes */}
       <mesh position={[0.14, 0.76, 0.88]}>
@@ -88,9 +89,22 @@ function pickClipName(available: string[], key: DinoAnimationKey): string | null
 
 function QuaterniusDinoModel({ activeAnimation }: { activeAnimation: DinoAnimationKey }) {
   const gltf = useGLTF(BABY_DINO_GLB);
-  const group = useRef<Group>(null);
+  const group = useRef<THREE.Group>(null);
+  const dinoColor = useGameStore((s) => s.dinoColor);
 
   const { actions, names } = useAnimations(gltf.animations, group);
+
+  useEffect(() => {
+    // Apply dynamic color to all meshes in the model
+    gltf.scene.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        const mesh = obj as THREE.Mesh;
+        if (mesh.material instanceof THREE.MeshStandardMaterial) {
+          mesh.material.color.set(dinoColor);
+        }
+      }
+    });
+  }, [gltf, dinoColor]);
 
   useEffect(() => {
     if (!actions) return;
@@ -265,7 +279,7 @@ export function BabyDino({
     }
   });
 
-  const finalScale = (scale ?? 1) * (controlled ? 1 : dinoScale) * 0.5;
+  const finalScale = (scale ?? 1) * (controlled ? 1 : dinoScale) * 0.25;
 
   return (
     <group
