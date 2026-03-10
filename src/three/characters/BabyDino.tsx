@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useEffect, useRef, useState } from "react";
+import { Suspense, useEffect, useRef, useState, useMemo } from "react";
 import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
 import { useAnimations, useGLTF } from "@react-three/drei";
@@ -114,6 +114,12 @@ export function BabyDino({
   const lastStoreSync = useRef<number>(0);
   const [animKey, setAnimKey] = useState<DinoAnimationKey>("idle");
 
+  // Behavior state for wandering/attention
+  const wanderOffset = useRef<THREE.Vector2>(new THREE.Vector2(0, 0));
+  const nextWanderAt = useRef<number>(0);
+  const lastLookedAt = useRef<number>(0);
+  const isLookingAtPlayer = useRef<boolean>(false);
+
   const controlled = !!position;
 
   useEffect(() => {
@@ -130,6 +136,7 @@ export function BabyDino({
     const playerRotation = useGameStore.getState().playerRotation;
     const desired = new THREE.Vector3();
     const cur = posRef.current;
+    const now = state.clock.elapsedTime;
 
     if (controlled && position) {
       desired.set(position[0], position[1], position[2]);
@@ -137,24 +144,48 @@ export function BabyDino({
       desired.set(directive.moveTarget.x, 0, directive.moveTarget.z);
     } else {
       const p = new THREE.Vector3(playerPos.x, 0, playerPos.z);
+      
       if (playerTarget) {
+        // Player is moving: dino stays to the side and slightly ahead
         const t = new THREE.Vector3(playerTarget.x, 0, playerTarget.z);
         const dir = t.clone().sub(p).normalize();
-        const ahead = p.clone().add(dir.multiplyScalar(Math.min(2.4, Math.max(0, t.distanceTo(p) - 1.0))));
-        desired.set(ahead.x, 0, ahead.z);
+        const sideDir = new THREE.Vector3(-dir.z, 0, dir.x); // perpendicular
+        
+        const aheadDist = 2.2;
+        const sideDist = 1.8;
+        
+        const targetPos = p.clone()
+          .add(dir.multiplyScalar(aheadDist))
+          .add(sideDir.multiplyScalar(sideDist));
+          
+        desired.set(targetPos.x, 0, targetPos.z);
       } else {
-        const offsetDist = 3.0;
-        const sideOffset = 1.0;
-        desired.set(
-          p.x + Math.sin(playerRotation) * offsetDist + Math.sin(playerRotation + Math.PI/2) * sideOffset,
+        // Idle wandering logic
+        if (now > nextWanderAt.current) {
+          nextWanderAt.current = now + 4 + Math.random() * 6;
+          wanderOffset.current.set(
+            (Math.random() - 0.5) * 4,
+            (Math.random() - 0.5) * 4
+          );
+        }
+
+        const offsetDist = 4.0;
+        const baseOffset = new THREE.Vector3(
+          Math.sin(playerRotation) * offsetDist,
           0,
-          p.z + Math.cos(playerRotation) * offsetDist + Math.cos(playerRotation + Math.PI/2) * sideOffset
+          Math.cos(playerRotation) * offsetDist
+        );
+        
+        desired.set(
+          p.x + baseOffset.x + wanderOffset.current.x,
+          0,
+          p.z + baseOffset.z + wanderOffset.current.y
         );
       }
     }
 
     const distToDesired = desired.distanceTo(cur);
-    const speed = controlled ? 0 : (playerTarget || directive.moveTarget) ? 3.2 : 2.0;
+    const speed = controlled ? 0 : (playerTarget || directive.moveTarget) ? 3.5 : 1.2;
     const step = Math.min(distToDesired, speed * delta);
     if (distToDesired > 0.001) {
       cur.lerp(desired, clamp(step / Math.max(distToDesired, 0.0001), 0, 1));
@@ -163,8 +194,27 @@ export function BabyDino({
     const bob = controlled ? 0 : Math.sin(Date.now() / 220) * 0.03;
     group.current.position.set(cur.x, 0 + bob, cur.z);
 
+    // Attention logic: Look at player occasionally
+    if (!directive.shouldSpeak && !directive.moveTarget && !playerTarget) {
+      const timeSinceLookChange = now - lastLookedAt.current;
+      if (isLookingAtPlayer.current) {
+        if (timeSinceLookChange > 3 + Math.random() * 2) {
+          isLookingAtPlayer.current = false;
+          lastLookedAt.current = now;
+        }
+      } else {
+        if (timeSinceLookChange > 5 + Math.random() * 10) {
+          isLookingAtPlayer.current = true;
+          lastLookedAt.current = now;
+        }
+      }
+    } else if (directive.shouldSpeak) {
+      isLookingAtPlayer.current = true;
+    }
+
     const look = new THREE.Vector3();
-    const shouldLookAtCamera = !!lookAtCamera || directive.animation === "look_at_camera" || directive.shouldSpeak || (!playerTarget && !directive.moveTarget);
+    const shouldLookAtCamera = !!lookAtCamera || directive.animation === "look_at_camera" || isLookingAtPlayer.current;
+    
     if (shouldLookAtCamera) {
       look.copy(camera.position);
     } else if (playerTarget && !controlled) {
@@ -172,23 +222,24 @@ export function BabyDino({
     } else if (directive.moveTarget) {
       look.set(directive.moveTarget.x, 0, directive.moveTarget.z);
     } else {
-      look.set(playerPos.x, 0, playerPos.z);
+      // Look where wandering
+      look.copy(desired);
     }
 
     const dir = look.clone().sub(group.current.position);
     const yaw = Math.atan2(dir.x, dir.z);
-    group.current.rotation.y = dampAngle(group.current.rotation.y, yaw, 10, delta);
+    group.current.rotation.y = dampAngle(group.current.rotation.y, yaw, 6, delta);
 
     let desiredAnim: DinoAnimationKey = forcedAnimation ?? directive.animation ?? "idle";
-    if (!controlled && distToDesired > 0.05) {
+    if (!controlled && distToDesired > 0.1) {
       desiredAnim = (playerTarget || directive.moveTarget) ? "run" : "walk";
     }
     setAnimKey(desiredAnim);
 
     if (!controlled) {
-      const now = performance.now();
-      if (now - lastStoreSync.current > 120) {
-        lastStoreSync.current = now;
+      const storeNow = performance.now();
+      if (storeNow - lastStoreSync.current > 120) {
+        lastStoreSync.current = storeNow;
         setDinoPos({ x: cur.x, y: 0, z: cur.z });
       }
     }
