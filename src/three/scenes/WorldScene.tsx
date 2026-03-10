@@ -16,6 +16,7 @@ function FollowCamera() {
   const camera = useThree((s) => s.camera);
   const playerPos = useGameStore((s) => s.playerPos);
   const playerRotation = useGameStore((s) => s.playerRotation);
+  const playerZoom = useGameStore((s) => s.playerZoom);
 
   const target = useMemo(() => new Vector3(), []);
 
@@ -23,6 +24,13 @@ function FollowCamera() {
     // First person camera: at player position, looking in rotation direction
     camera.position.set(playerPos.x, 1.4, playerPos.z);
     
+    // Default FOV is usually 75. Scale it by zoom factor.
+    // Higher zoom factor = higher FOV = more zoomed out.
+    if ("fov" in camera) {
+      (camera as any).fov = 75 * playerZoom;
+      (camera as any).updateProjectionMatrix();
+    }
+
     target.set(
       playerPos.x + Math.sin(playerRotation),
       1.4,
@@ -38,11 +46,15 @@ function Controls() {
   const { gl } = useThree();
   const setPlayerRotation = useGameStore((s) => s.setPlayerRotation);
   const playerRotation = useGameStore((s) => s.playerRotation);
-  const setMoveTarget = useGameStore((s) => s.setMoveTarget);
+  const setPlayerZoom = useGameStore((s) => s.setPlayerZoom);
+  const playerZoom = useGameStore((s) => s.playerZoom);
 
   const isDragging = useRef(false);
   const lastX = useRef(0);
   const didMove = useRef(false);
+  
+  // Pinch zoom state
+  const lastPinchDist = useRef<number | null>(null);
 
   useEffect(() => {
     const canvas = gl.domElement;
@@ -59,32 +71,62 @@ function Controls() {
       const deltaX = e.clientX - lastX.current;
       if (Math.abs(deltaX) > 2) {
         didMove.current = true;
-        // Adjust sensitivity for kid-friendly rotation
         const newYaw = playerRotation - deltaX * 0.008;
         setPlayerRotation(newYaw);
       }
       lastX.current = e.clientX;
     };
 
-    const onPointerUp = (e: PointerEvent) => {
+    const onPointerUp = () => {
       isDragging.current = false;
-      
-      // If we didn't drag much, treat it as a tap for movement
-      if (!didMove.current) {
-        // We'll handle tapping the ground via WorldGround's onPointerDown
+    };
+
+    const onWheel = (e: WheelEvent) => {
+      // Zoom in/out with mouse wheel
+      const delta = e.deltaY * 0.001;
+      const newZoom = clamp(playerZoom + delta, 0.5, 2.0);
+      setPlayerZoom(newZoom);
+    };
+
+    const onTouchMove = (e: TouchEvent) => {
+      if (e.touches.length === 2) {
+        // Pinch-to-zoom logic
+        const t1 = e.touches[0];
+        const t2 = e.touches[1];
+        const dist = Math.sqrt(
+          Math.pow(t1.clientX - t2.clientX, 2) + 
+          Math.pow(t1.clientY - t2.clientY, 2)
+        );
+
+        if (lastPinchDist.current !== null) {
+          const delta = (lastPinchDist.current - dist) * 0.005;
+          const newZoom = clamp(playerZoom + delta, 0.5, 2.0);
+          setPlayerZoom(newZoom);
+        }
+        lastPinchDist.current = dist;
       }
+    };
+
+    const onTouchEnd = () => {
+      lastPinchDist.current = null;
     };
 
     canvas.addEventListener("pointerdown", onPointerDown);
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
+    canvas.addEventListener("wheel", onWheel, { passive: false });
+    canvas.addEventListener("touchmove", onTouchMove, { passive: false });
+    canvas.addEventListener("touchend", onTouchEnd);
 
     return () => {
       canvas.removeEventListener("pointerdown", onPointerDown);
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
+      canvas.removeEventListener("wheel", onWheel);
+      canvas.removeEventListener("touchmove", onTouchMove);
+      canvas.removeEventListener("touchend", onTouchEnd);
     };
-  }, [gl, playerRotation, setPlayerRotation]);
+  }, [gl, playerRotation, setPlayerRotation, playerZoom, setPlayerZoom]);
 
   return null;
 }

@@ -265,7 +265,7 @@ export function BabyDino({
     }
   });
 
-  const finalScale = (scale ?? 1) * (controlled ? 1 : dinoScale);
+  const finalScale = (scale ?? 1) * (controlled ? 1 : dinoScale) * 0.5;
 
   return (
     <group
