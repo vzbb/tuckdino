@@ -169,7 +169,7 @@ export function BabyDino({
     return () => window.clearTimeout(t);
   }, [moveSequenceId, playerTarget, controlled, setDinoDirective]);
 
-  useFrame((_, delta) => {
+  useFrame((state, delta) => {
     if (!group.current) return;
 
     // Determine desired position
@@ -178,6 +178,9 @@ export function BabyDino({
 
     if (controlled && position) {
       desired.set(position[0], position[1], position[2]);
+    } else if (directive.moveTarget) {
+      // Autonomous movement target (Gemini-driven)
+      desired.set(directive.moveTarget.x, 0, directive.moveTarget.z);
     } else {
       const p = new Vector3(playerPos.x, 0, playerPos.z);
 
@@ -232,7 +235,9 @@ export function BabyDino({
     let desiredAnim: DinoAnimationKey = forcedAnimation ?? directive.animation ?? "idle";
     if (!controlled) {
       const isMoving = distToDesired > 0.05;
-      if (isMoving) desiredAnim = playerTarget ? "run" : "walk";
+      if (isMoving) {
+        desiredAnim = (playerTarget || directive.moveTarget) ? "run" : "walk";
+      }
     }
     setAnimKey(desiredAnim);
 

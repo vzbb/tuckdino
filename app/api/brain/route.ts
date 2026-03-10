@@ -33,6 +33,15 @@ const schema = {
       description:
         "If shouldSpeak is true, provide a SHORT phrase (3-6 words).",
     },
+    moveTarget: {
+      type: "object",
+      properties: {
+        x: { type: "number" },
+        y: { type: "number" },
+        z: { type: "number" },
+      },
+      description: "Optional coordinate to move towards (e.g., an interest point).",
+    },
   },
 };
 
@@ -67,11 +76,13 @@ export async function POST(req: Request) {
     "- Simple toddler-friendly words.",
     "- If asking a question, keep it yes/no or choice-like.",
     "",
-    "BEHAVIOR:",
+    "BEHAVIOR & MOVEMENT:",
     "- If Tucker taps to move, you lead the way happily.",
     "- If Tucker looks tired/confused, be comforting and calm.",
     "- If Tucker is excited/happy, celebrate gently.",
     "- If idle, proactively invite a tiny activity (water, flowers, campfire) without being pushy.",
+    "- You can autonomously move to 'interestPoints' in the world (e.g., flowers, hut, camp).",
+    "- To move towards an interest point, provide its exact 'pos' in the 'moveTarget' field.",
     "",
     "OUTPUT:",
     "- Return ONLY valid JSON that matches the response schema exactly.",

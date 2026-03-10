@@ -30,6 +30,7 @@ export type DinoDirectiveResult = {
     | "wave";
   shouldSpeak: boolean;
   speech_text?: string;
+  moveTarget?: { x: number; y: number; z: number };
 };
 
 export type TtsResult = {

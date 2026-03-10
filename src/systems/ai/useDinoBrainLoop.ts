@@ -26,6 +26,9 @@ function buildContext() {
       stats: s.dinoStats,
       lastDirective: s.dinoDirective,
     },
+    world: {
+      interestPoints: s.interestPoints,
+    },
     sensors: {
       face: s.face,
       speech: s.speech,
@@ -110,9 +113,26 @@ export function useDinoBrainLoop() {
           animation: res.animation,
           shouldSpeak: res.shouldSpeak,
           speech_text: res.speech_text,
+          moveTarget: res.moveTarget,
         };
 
         setDirective(directive);
+
+        // If moveTarget is a known interest point, record the event
+        if (directive.moveTarget) {
+          const point = s.interestPoints.find(p => 
+            Math.abs(p.pos.x - directive.moveTarget!.x) < 0.1 && 
+            Math.abs(p.pos.z - directive.moveTarget!.z) < 0.1
+          );
+          if (point) {
+            useGameStore.getState().pushEvent({
+              t: Date.now(),
+              type: "dino_investigate",
+              targetId: point.id
+            });
+          }
+        }
+
         clearEvents();
 
         if (directive.shouldSpeak && directive.speech_text) {
@@ -142,4 +162,45 @@ export function useDinoBrainLoop() {
 
     return () => window.clearInterval(id);
   }, [setDirective, clearEvents, speak]);
+
+  // Local proximity reactive loop (for immediate wiggles/reactions)
+  useEffect(() => {
+    const id = window.setInterval(() => {
+      const s = useGameStore.getState();
+      if (s.scene !== "world") return;
+
+      const dPos = s.dinoPos;
+      
+      // Find closest interest point
+      let closestDist = Infinity;
+      let closestId = "";
+      s.interestPoints.forEach(p => {
+        const dist = Math.sqrt(Math.pow(p.pos.x - dPos.x, 2) + Math.pow(p.pos.z - dPos.z, 2));
+        if (dist < closestDist) {
+          closestDist = dist;
+          closestId = p.id;
+        }
+      });
+
+      // If very close to an interest point and idle/calm, trigger a small reaction
+      if (closestDist < 1.5 && s.dinoDirective.animation === "idle") {
+        const point = s.interestPoints.find(p => p.id === closestId);
+        if (point) {
+          // Special reaction based on type
+          let anim: DinoAnimationKey = "look_at_camera";
+          if (point.type === "flowers") anim = "nuzzle";
+          else if (point.type === "camp") anim = "sit";
+          else if (point.type === "stream") anim = "hop";
+
+          setDirective({
+            ...s.dinoDirective,
+            animation: anim,
+            mood: "playful"
+          });
+        }
+      }
+    }, 1000);
+
+    return () => window.clearInterval(id);
+  }, [setDirective]);
 }

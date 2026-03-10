@@ -33,6 +33,14 @@ export type DinoDirective = {
   animation: DinoAnimationKey;
   speech_text?: string;
   shouldSpeak: boolean;
+  moveTarget?: Vec3; // Optional target for autonomous movement
+};
+
+export type InterestPoint = {
+  id: string;
+  pos: Vec3;
+  type: "flowers" | "butterfly" | "village" | "stream" | "camp";
+  label: string;
 };
 
 export type GameEvent =
@@ -40,7 +48,8 @@ export type GameEvent =
   | { t: number; type: "egg_hatched" }
   | { t: number; type: "tap_move"; target: Vec3 }
   | { t: number; type: "dino_action"; action: DinoAction }
-  | { t: number; type: "collectible_found"; id: string };
+  | { t: number; type: "collectible_found"; id: string }
+  | { t: number; type: "dino_investigate"; targetId: string };
 
 type GameState = {
   childName: string;
@@ -66,6 +75,9 @@ type GameState = {
   };
   dinoDirective: DinoDirective;
   radialMenuOpen: boolean;
+
+  // World Context
+  interestPoints: InterestPoint[];
 
   // Camp
   campActive: boolean;
@@ -158,6 +170,13 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
   dinoDirective: defaultDirective,
   radialMenuOpen: false,
+
+  interestPoints: [
+    { id: "village_hut", pos: { x: -10, y: 0, z: -6 }, type: "village", label: "Cozy Hut" },
+    { id: "stream_bank", pos: { x: 0, y: 0, z: -12 }, type: "stream", label: "Sparkling Stream" },
+    { id: "flower_field", pos: { x: -2, y: 0, z: 10 }, type: "flowers", label: "Smelly Flowers" },
+    { id: "camp_center", pos: { x: 10, y: 0, z: 10 }, type: "camp", label: "Warm Campfire" },
+  ],
 
   campActive: false,
   campPos: null,
