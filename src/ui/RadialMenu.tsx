@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo } from "react";
+import { useMemo, useState, useEffect } from "react";
 import { useGameStore, type DinoAction } from "@/src/state/useGameStore";
 import { useDinoSpeak } from "@/src/systems/ai/useDinoSpeak";
 
@@ -16,27 +16,34 @@ function ActionButton({
   return (
     <button
       onClick={onClick}
+      className="radial-button"
       aria-label={label}
       style={{
-        width: 92,
-        height: 92,
-        borderRadius: 999,
-        border: "1px solid rgba(255,255,255,0.20)",
-        background: "rgba(0,0,0,0.40)",
+        width: 100,
+        height: 100,
+        borderRadius: 24,
+        border: "2px solid rgba(255,255,255,0.15)",
+        background: "linear-gradient(135deg, rgba(255,255,255,0.1), rgba(255,255,255,0.05))",
+        backdropFilter: "blur(8px)",
         color: "white",
-        display: "grid",
-        placeItems: "center",
-        boxShadow: "0 12px 26px rgba(0,0,0,0.35)",
-        touchAction: "manipulation",
+        display: "flex",
+        flexDirection: "column",
+        alignItems: "center",
+        justifyContent: "center",
+        boxShadow: "0 8px 20px rgba(0,0,0,0.2)",
+        transition: "all 0.2s cubic-bezier(0.175, 0.885, 0.32, 1.275)",
+        cursor: "pointer",
+        padding: 0,
       }}
     >
-      <div style={{ fontSize: 36, lineHeight: 1 }}>{emoji}</div>
-      <div style={{ fontSize: 14, fontWeight: 800, marginTop: 2 }}>{label}</div>
+      <div style={{ fontSize: 40, marginBottom: 4, filter: "drop-shadow(0 4px 8px rgba(0,0,0,0.3))" }}>{emoji}</div>
+      <div style={{ fontSize: 13, fontWeight: 800, textTransform: "uppercase", letterSpacing: "0.5px" }}>{label}</div>
     </button>
   );
 }
 
 export function RadialMenu() {
+  const isOpen = useGameStore((s) => s.radialMenuOpen);
   const close = useGameStore((s) => s.closeRadialMenu);
   const apply = useGameStore((s) => s.applyDinoAction);
   const name = useGameStore((s) => s.childName);
@@ -71,76 +78,121 @@ export function RadialMenu() {
     }
   };
 
+  if (!isOpen) return null;
+
   return (
-    <div
-      onPointerDown={() => close()}
-      style={{
-        position: "absolute",
-        inset: 0,
-        background: "rgba(0,0,0,0.25)",
-        display: "grid",
-        placeItems: "center",
-        padding: 20,
-      }}
-    >
+    <>
+      <style>{`
+        @keyframes radialFadeIn {
+          from { opacity: 0; transform: scale(0.9) translateY(10px); }
+          to { opacity: 1; transform: scale(1) translateY(0); }
+        }
+        .radial-overlay {
+          animation: fadeIn 0.3s ease-out;
+        }
+        @keyframes fadeIn {
+          from { opacity: 0; }
+          to { opacity: 1; }
+        }
+        .radial-content {
+          animation: radialFadeIn 0.4s cubic-bezier(0.165, 0.84, 0.44, 1);
+        }
+        .radial-button:active {
+          transform: scale(0.92);
+          background: rgba(255,255,255,0.2) !important;
+        }
+      `}</style>
       <div
-        onPointerDown={(e) => e.stopPropagation()}
+        className="radial-overlay"
+        onPointerDown={() => close()}
         style={{
-          width: "min(520px, 94vw)",
-          borderRadius: 28,
-          padding: 18,
-          border: "1px solid rgba(255,255,255,0.18)",
-          background: "rgba(12,18,35,0.82)",
-          backdropFilter: "blur(10px)",
+          position: "absolute",
+          inset: 0,
+          background: "rgba(0,0,0,0.4)",
+          backdropFilter: "blur(4px)",
+          display: "grid",
+          placeItems: "center",
+          padding: 20,
+          zIndex: 100,
         }}
       >
-        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", gap: 12 }}>
-          <div style={{ color: "white", fontWeight: 900, fontSize: 20 }}>
-            🦕 Baby Dino Menu
-          </div>
-          <button
-            onClick={() => close()}
-            style={{
-              borderRadius: 999,
-              border: "1px solid rgba(255,255,255,0.18)",
-              background: "rgba(0,0,0,0.35)",
-              color: "white",
-              fontWeight: 900,
-              fontSize: 16,
-              padding: "10px 14px",
-            }}
-          >
-            ✖
-          </button>
-        </div>
-
         <div
+          className="radial-content"
+          onPointerDown={(e) => e.stopPropagation()}
           style={{
-            marginTop: 14,
-            display: "grid",
-            gridTemplateColumns: "repeat(3, 1fr)",
-            gap: 14,
-            justifyItems: "center",
+            width: "min(480px, 94vw)",
+            borderRadius: 40,
+            padding: 24,
+            border: "2px solid rgba(255,255,255,0.2)",
+            background: "linear-gradient(180deg, rgba(30,40,70,0.9), rgba(15,20,40,0.95))",
+            boxShadow: "0 20px 60px rgba(0,0,0,0.5)",
           }}
         >
-          {actions.map((a) => (
-            <ActionButton
-              key={a.action}
-              emoji={a.emoji}
-              label={a.label}
-              onClick={async () => {
-                close();
-                apply(a.action);
-                await speak({ text: quickPhrase(a.action), mood: "playful", sceneHint: "world" });
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 20 }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+              <div style={{ fontSize: 28 }}>🦕</div>
+              <div style={{ color: "white", fontWeight: 900, fontSize: 22, letterSpacing: "-0.5px" }}>
+                Baby Dino Care
+              </div>
+            </div>
+            <button
+              onClick={() => close()}
+              style={{
+                width: 44,
+                height: 44,
+                borderRadius: 22,
+                border: "1px solid rgba(255,255,255,0.2)",
+                background: "rgba(255,255,255,0.1)",
+                color: "white",
+                fontWeight: 900,
+                fontSize: 18,
+                cursor: "pointer",
+                display: "grid",
+                placeItems: "center",
+                transition: "background 0.2s",
               }}
-            />
-          ))}
-        </div>
+            >
+              ✕
+            </button>
+          </div>
 
-        <div style={{ marginTop: 14, color: "rgba(255,255,255,0.82)", fontWeight: 700 }}>
-          Tip: Tap the ground to walk. Tap baby dino for this menu. 😊
+          <div
+            style={{
+              display: "grid",
+              gridTemplateColumns: "repeat(3, 1fr)",
+              gap: 16,
+              justifyItems: "center",
+            }}
+          >
+            {actions.map((a) => (
+              <ActionButton
+                key={a.action}
+                emoji={a.emoji}
+                label={a.label}
+                onClick={async () => {
+                  close();
+                  apply(a.action);
+                  await speak({ text: quickPhrase(a.action), mood: "playful", sceneHint: "world" });
+                }}
+              />
+            ))}
+          </div>
+
+          <div style={{ 
+            marginTop: 24, 
+            padding: "12px 16px",
+            background: "rgba(255,255,255,0.05)",
+            borderRadius: 16,
+            color: "rgba(255,255,255,0.7)", 
+            fontWeight: 600,
+            fontSize: 14,
+            textAlign: "center"
+          }}>
+            Tap anywhere else to close
+          </div>
         </div>
       </div>
-    </div>
+    </>
   );
 }
+

@@ -1,10 +1,45 @@
 "use client";
 
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
-import { Mesh, Vector3 } from "three";
+import * as THREE from "three";
 import { useGameStore } from "@/src/state/useGameStore";
 import { clamp } from "@/src/systems/utils/math";
+
+function TargetFeedback() {
+  const target = useGameStore((s) => s.playerTarget);
+  const meshRef = useRef<THREE.Mesh>(null);
+
+  useFrame((state) => {
+    if (!meshRef.current || !target) return;
+    
+    // Position at target
+    meshRef.current.position.set(target.x, 0.05, target.z);
+    
+    // Pulsing/fading effect
+    const t = (state.clock.elapsedTime * 2) % 1;
+    const s = 0.5 + t * 1.5;
+    meshRef.current.scale.set(s, s, s);
+    if (meshRef.current.material instanceof THREE.MeshStandardMaterial) {
+      meshRef.current.material.opacity = 1 - t;
+    }
+  });
+
+  if (!target) return null;
+
+  return (
+    <mesh ref={meshRef} rotation-x={-Math.PI / 2}>
+      <ringGeometry args={[0.4, 0.5, 32]} />
+      <meshStandardMaterial 
+        color={"#ffffff"} 
+        transparent 
+        opacity={0.5} 
+        emissive={"#7aa2ff"} 
+        emissiveIntensity={1} 
+      />
+    </mesh>
+  );
+}
 
 /**
  * A simple “Tucker marker” — a friendly glowing orb that moves where Tucker taps.
@@ -16,8 +51,8 @@ export function PlayerMarker() {
   const target = useGameStore((s) => s.playerTarget);
   const clearTarget = useGameStore((s) => s.clearMoveTarget);
 
-  const meshRef = useRef<Mesh>(null);
-  const posRef = useRef<Vector3>(new Vector3(playerPos.x, playerPos.y, playerPos.z));
+  const meshRef = useRef<THREE.Mesh>(null);
+  const posRef = useRef<THREE.Vector3>(new THREE.Vector3(playerPos.x, playerPos.y, playerPos.z));
   const lastStoreSync = useRef<number>(0);
 
   // keep local ref in sync if something external changes
@@ -29,7 +64,7 @@ export function PlayerMarker() {
     const cur = posRef.current;
 
     if (target) {
-      const t = new Vector3(target.x, target.y, target.z);
+      const t = new THREE.Vector3(target.x, target.y, target.z);
       const dist = cur.distanceTo(t);
 
       const speed = 2.2; // gentle walking speed
@@ -55,9 +90,13 @@ export function PlayerMarker() {
   });
 
   return (
-    <mesh ref={meshRef} castShadow>
-      <sphereGeometry args={[0.25, 20, 20]} />
-      <meshStandardMaterial color={"#ffffff"} emissive={"#7aa2ff"} emissiveIntensity={0.6} />
-    </mesh>
+    <>
+      <TargetFeedback />
+      <mesh ref={meshRef} castShadow>
+        <sphereGeometry args={[0.25, 20, 20]} />
+        <meshStandardMaterial color={"#ffffff"} emissive={"#7aa2ff"} emissiveIntensity={0.6} />
+      </mesh>
+    </>
   );
 }
+

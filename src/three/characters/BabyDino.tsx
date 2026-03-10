@@ -8,7 +8,7 @@ import { AssetBoundary } from "@/src/three/components/AssetBoundary";
 import { useGameStore, type DinoAnimationKey } from "@/src/state/useGameStore";
 import { clamp, dampAngle } from "@/src/systems/utils/math";
 
-const BABY_DINO_GLB = "/assets/quaternius/baby_dino.glb";
+const BABY_DINO_GLB = "/assets/quaternius/Parasaurolophus.glb";
 
 type Props = {
   /** If provided, the dino is “scene controlled” (used during hatch intro). */
