@@ -15,23 +15,76 @@ import { Collectibles } from "@/src/three/world/Collectibles";
 function FollowCamera() {
   const camera = useThree((s) => s.camera);
   const playerPos = useGameStore((s) => s.playerPos);
-  const dinoPos = useGameStore((s) => s.dinoPos);
+  const playerRotation = useGameStore((s) => s.playerRotation);
 
   const target = useMemo(() => new Vector3(), []);
-  const desired = useMemo(() => new Vector3(), []);
 
   useFrame(() => {
-    // Camera focus is between Tucker + dino
+    // First person camera: at player position, looking in rotation direction
+    camera.position.set(playerPos.x, 1.4, playerPos.z);
+    
     target.set(
-      (playerPos.x + dinoPos.x) * 0.5,
-      1.2,
-      (playerPos.z + dinoPos.z) * 0.5
+      playerPos.x + Math.sin(playerRotation),
+      1.4,
+      playerPos.z + Math.cos(playerRotation)
     );
-    desired.set(target.x, target.y + 6.0, target.z + 10.5);
-
-    camera.position.lerp(desired, 0.06);
     camera.lookAt(target);
   });
+
+  return null;
+}
+
+function Controls() {
+  const { gl } = useThree();
+  const setPlayerRotation = useGameStore((s) => s.setPlayerRotation);
+  const playerRotation = useGameStore((s) => s.playerRotation);
+  const setMoveTarget = useGameStore((s) => s.setMoveTarget);
+
+  const isDragging = useRef(false);
+  const lastX = useRef(0);
+  const didMove = useRef(false);
+
+  useEffect(() => {
+    const canvas = gl.domElement;
+
+    const onPointerDown = (e: PointerEvent) => {
+      isDragging.current = true;
+      lastX.current = e.clientX;
+      didMove.current = false;
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (!isDragging.current) return;
+      
+      const deltaX = e.clientX - lastX.current;
+      if (Math.abs(deltaX) > 2) {
+        didMove.current = true;
+        // Adjust sensitivity for kid-friendly rotation
+        const newYaw = playerRotation - deltaX * 0.008;
+        setPlayerRotation(newYaw);
+      }
+      lastX.current = e.clientX;
+    };
+
+    const onPointerUp = (e: PointerEvent) => {
+      isDragging.current = false;
+      
+      // If we didn't drag much, treat it as a tap for movement
+      if (!didMove.current) {
+        // We'll handle tapping the ground via WorldGround's onPointerDown
+      }
+    };
+
+    canvas.addEventListener("pointerdown", onPointerDown);
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+
+    return () => {
+      canvas.removeEventListener("pointerdown", onPointerDown);
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+    };
+  }, [gl, playerRotation, setPlayerRotation]);
 
   return null;
 }
@@ -68,15 +121,30 @@ function Lighting() {
 
 function WorldGround() {
   const setMoveTarget = useGameStore((s) => s.setMoveTarget);
+  const isDragging = useRef(false);
+  const startPos = useRef({ x: 0, y: 0 });
 
   return (
     <mesh
       rotation-x={-Math.PI / 2}
       receiveShadow
       onPointerDown={(e) => {
-        // Touch to move (tap anywhere on the ground)
-        e.stopPropagation();
-        setMoveTarget({ x: e.point.x, y: 0, z: e.point.z });
+        startPos.current = { x: e.clientX, y: e.clientY };
+        isDragging.current = false;
+      }}
+      onPointerMove={(e) => {
+        const dx = e.clientX - startPos.current.x;
+        const dy = e.clientY - startPos.current.y;
+        if (Math.abs(dx) > 5 || Math.abs(dy) > 5) {
+          isDragging.current = true;
+        }
+      }}
+      onPointerUp={(e) => {
+        // Only move if we weren't dragging the camera
+        if (!isDragging.current) {
+          e.stopPropagation();
+          setMoveTarget({ x: e.point.x, y: 0, z: e.point.z });
+        }
       }}
     >
       <planeGeometry args={[140, 140, 1, 1]} />
@@ -105,6 +173,7 @@ export function WorldScene() {
 
       <Lighting />
 
+      <Controls />
       <WorldGround />
 
       <WorldProps />

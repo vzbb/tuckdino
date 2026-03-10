@@ -21,7 +21,7 @@ Goal: Create dynamic, reactive behaviors that make the dino feel "alive" in the 
 ## Phase 3: Touch & Interaction Refinement
 Goal: Improve the tactile feel of player interaction.
 
-- [x] Task: Add visual feedback for "Tap-to-Move" target (e.g., ground ripple, marker animation).
-- [x] Task: Implement subtle "Dino Attention" logic—where the dino looks at the player or interaction point.
-- [x] Task: Refine the Radial Menu appearance and transition animations in `RadialMenu.tsx`.
+- [x] Task: Implement First-Person Perspective with touch drag rotation.
+- [x] Task: Update Baby Dino positioning and attention logic for FPS view.
+- [x] Task: Remove legacy player marker and ground target feedback in favor of immersive view.
 - [x] Task: Conductor - User Manual Verification 'Touch & Interaction Refinement' (Protocol in workflow.md)

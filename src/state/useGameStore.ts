@@ -60,6 +60,7 @@ type GameState = {
 
   // Player movement
   playerPos: Vec3;
+  playerRotation: number; // yaw in radians
   playerTarget: Vec3 | null;
   moveSequenceId: number; // increments on each new target
 
@@ -112,6 +113,7 @@ type GameState = {
   markEggHatched: () => void;
 
   setPlayerPos: (pos: Vec3) => void;
+  setPlayerRotation: (yaw: number) => void;
   setMoveTarget: (target: Vec3) => void;
   clearMoveTarget: () => void;
 
@@ -156,6 +158,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   eggSelectedId: null,
 
   playerPos: { x: 0, y: 0, z: 6 },
+  playerRotation: 0,
   playerTarget: null,
   moveSequenceId: 0,
 
@@ -205,6 +208,8 @@ export const useGameStore = create<GameState>((set, get) => ({
   },
 
   setPlayerPos: (pos) => set({ playerPos: pos }),
+
+  setPlayerRotation: (yaw) => set({ playerRotation: yaw }),
 
   setMoveTarget: (target) => {
     set((s) => ({

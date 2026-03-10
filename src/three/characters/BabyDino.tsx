@@ -172,6 +172,8 @@ export function BabyDino({
   useFrame((state, delta) => {
     if (!group.current) return;
 
+    const playerRotation = useGameStore.getState().playerRotation;
+
     // Determine desired position
     const desired = new Vector3();
     const cur = posRef.current;
@@ -183,21 +185,29 @@ export function BabyDino({
       desired.set(directive.moveTarget.x, 0, directive.moveTarget.z);
     } else {
       const p = new Vector3(playerPos.x, 0, playerPos.z);
-
+      
       if (playerTarget) {
+        // Player is moving: dino leads slightly but stays in FOV
         const t = new Vector3(playerTarget.x, 0, playerTarget.z);
         const dir = t.clone().sub(p);
         const dist = dir.length();
         dir.normalize();
 
-        const lead = 2.6;
-        const stopShort = 0.9; // dino stops a bit before the target
+        const lead = 2.4;
+        const stopShort = 1.0; 
 
         const ahead = p.clone().add(dir.multiplyScalar(Math.min(lead, Math.max(0, dist - stopShort))));
         desired.set(ahead.x, 0, ahead.z);
       } else {
-        // No target: hang out slightly in front of the player.
-        desired.set(p.x, 0, p.z - 2.4);
+        // No target: Hang out in front of the player view (FPS-style)
+        // Offset slightly to the side so we don't block the center of view
+        const offsetDist = 3.5;
+        const sideOffset = 1.2;
+        desired.set(
+          p.x + Math.sin(playerRotation) * offsetDist + Math.sin(playerRotation + Math.PI/2) * sideOffset,
+          0,
+          p.z + Math.cos(playerRotation) * offsetDist + Math.cos(playerRotation + Math.PI/2) * sideOffset
+        );
       }
     }
 
@@ -216,8 +226,12 @@ export function BabyDino({
 
     // Face direction
     const look = new Vector3();
+    // In FPS mode, the dino should look at the player when speaking or when idling
     const shouldLookAtCamera =
-      !!lookAtCamera || directive.animation === "look_at_camera";
+      !!lookAtCamera || 
+      directive.animation === "look_at_camera" || 
+      directive.shouldSpeak ||
+      (!playerTarget && !directive.moveTarget);
 
     if (shouldLookAtCamera) {
       look.copy(camera.position);
