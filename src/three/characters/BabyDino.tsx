@@ -71,13 +71,83 @@ function pickClipName(available: string[], key: DinoAnimationKey): string | null
   }
 }
 
+function InteractionEffects() {
+  const recentEvents = useGameStore((s) => s.recentEvents);
+  const [showHearts, setShowHearts] = useState(false);
+  const lastEventRef = useRef<number>(0);
+
+  useEffect(() => {
+    const last = recentEvents[recentEvents.length - 1];
+    if (last?.type === "dino_action" && (last.action === "pet" || last.action === "feed") && last.t > lastEventRef.current) {
+      lastEventRef.current = last.t;
+      setShowHearts(true);
+      const timer = setTimeout(() => setShowHearts(false), 2000);
+      return () => clearTimeout(timer);
+    }
+  }, [recentEvents]);
+
+  if (!showHearts) return null;
+
+  return (
+    <group position={[0, 1.2, 0]}>
+      {Array.from({ length: 8 }).map((_, i) => (
+        <Heart key={i} index={i} />
+      ))}
+    </group>
+  );
+}
+
+function Heart({ index }: { index: number }) {
+  const ref = useRef<THREE.Mesh>(null);
+  const speed = useMemo(() => 0.5 + Math.random() * 1, []);
+  const offset = useMemo(() => new THREE.Vector3(
+    (Math.random() - 0.5) * 1.5,
+    Math.random() * 0.5,
+    (Math.random() - 0.5) * 1.5
+  ), []);
+
+  useFrame((state) => {
+    if (!ref.current) return;
+    const t = state.clock.elapsedTime % 2;
+    ref.current.position.y = offset.y + t * speed;
+    ref.current.position.x = offset.x + Math.sin(t * 5 + index) * 0.2;
+    ref.current.scale.setScalar(clamp(1 - t/2, 0, 1) * 0.4);
+    ref.current.rotation.y = t * 2;
+  });
+
+  return (
+    <mesh ref={ref}>
+      <sphereGeometry args={[0.2, 8, 8]} />
+      <meshStandardMaterial color={"#ff6b8b"} emissive={"#ff3366"} emissiveIntensity={1} />
+    </mesh>
+  );
+}
+
 function QuaterniusDinoModel({ activeAnimation }: { activeAnimation: DinoAnimationKey }) {
   const gltf = useGLTF(BABY_DINO_GLB);
   const group = useRef<THREE.Group>(null);
   const { actions, names } = useAnimations(gltf.animations, group);
+  const dayPhase = useGameStore((s) => s.dayPhase);
 
   useEffect(() => {
-    if (!actions) return;
+    // Night glow logic
+    gltf.scene.traverse((obj) => {
+      if ((obj as THREE.Mesh).isMesh) {
+        const mesh = obj as THREE.Mesh;
+        if (mesh.material instanceof THREE.MeshStandardMaterial) {
+          if (dayPhase === "night") {
+            mesh.material.emissive.set("#44ffcc");
+            mesh.material.emissiveIntensity = 0.2 + Math.sin(Date.now() / 1000) * 0.1;
+          } else {
+            mesh.material.emissive.set("#000000");
+            mesh.material.emissiveIntensity = 0;
+          }
+        }
+      }
+    });
+  }, [gltf, dayPhase]);
+
+  useEffect(() => {
     const clipName = pickClipName(names, activeAnimation);
     if (!clipName) return;
     const action = actions[clipName];
@@ -249,6 +319,7 @@ export function BabyDino({
 
   return (
     <group ref={group} scale={finalScale} onPointerDown={(e) => { if (interactive) { e.stopPropagation(); openMenu(); } }}>
+      <InteractionEffects />
       <AssetBoundary fallback={<FallbackDinoBody />}>
         <Suspense fallback={<FallbackDinoBody />}>
           <QuaterniusDinoModel activeAnimation={animKey} />

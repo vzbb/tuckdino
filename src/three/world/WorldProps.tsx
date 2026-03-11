@@ -108,9 +108,72 @@ function Campfire() {
   );
 }
 
+function Butterflies() {
+  const count = 5;
+  const meshRefs = useRef<THREE.Mesh[]>([]);
+  const initialPositions = useMemo(() => 
+    Array.from({ length: count }).map(() => ({
+      x: (Math.random() - 0.5) * 20,
+      y: 1 + Math.random() * 2,
+      z: (Math.random() - 0.5) * 20,
+      offset: Math.random() * 100
+    }))
+  , [count]);
+
+  useFrame((state) => {
+    const t = state.clock.elapsedTime;
+    meshRefs.current.forEach((mesh, i) => {
+      if (!mesh) return;
+      const pos = initialPositions[i];
+      
+      // Butterfly flight pattern
+      mesh.position.x = pos.x + Math.sin(t * 0.5 + pos.offset) * 3;
+      mesh.position.y = pos.y + Math.sin(t * 2 + pos.offset) * 0.5;
+      mesh.position.z = pos.z + Math.cos(t * 0.4 + pos.offset) * 3;
+      
+      // Wing flap
+      const wing = mesh.children[0] as THREE.Mesh;
+      if (wing) {
+        wing.rotation.z = Math.sin(t * 15) * 0.8;
+      }
+      const wing2 = mesh.children[1] as THREE.Mesh;
+      if (wing2) {
+        wing2.rotation.z = -Math.sin(t * 15) * 0.8;
+      }
+
+      // Look in movement direction
+      mesh.rotation.y = t * 0.5 + pos.offset;
+    });
+  });
+
+  return (
+    <group>
+      {initialPositions.map((pos, i) => (
+        <mesh 
+          key={i} 
+          ref={(el) => { if (el) meshRefs.current[i] = el; }}
+          position={[pos.x, pos.y, pos.z]}
+        >
+          {/* Left Wing */}
+          <mesh rotation-y={Math.PI / 2}>
+            <planeGeometry args={[0.15, 0.15]} />
+            <meshStandardMaterial color={"#ff9ebb"} side={THREE.DoubleSide} emissive={"#ff9ebb"} emissiveIntensity={0.5} />
+          </mesh>
+          {/* Right Wing */}
+          <mesh rotation-y={-Math.PI / 2}>
+            <planeGeometry args={[0.15, 0.15]} />
+            <meshStandardMaterial color={"#ff9ebb"} side={THREE.DoubleSide} emissive={"#ff9ebb"} emissiveIntensity={0.5} />
+          </mesh>
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
 export function WorldProps() {
   return (
     <group>
+      <Butterflies />
       {/* Village hut */}
       <group position={[-10, 0, -6]} rotation-y={0.4} scale={1.1}>
         <AssetBoundary fallback={<FallbackHut />}>
