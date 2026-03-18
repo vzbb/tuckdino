@@ -34,9 +34,11 @@ export type DinoDirectiveResult = {
 };
 
 export type TtsResult = {
-  audioBase64: string; // base64 PCM16 mono
-  sampleRate: number; // 24000
-  channels: number; // 1
+  audioBase64: string;
+  mimeType?: string;
+  sampleRate: number;
+  channels: number;
+  cacheHit?: boolean;
 };
 
 async function postJson<T>(url: string, body: unknown, timeoutMs = 12_000): Promise<T> {

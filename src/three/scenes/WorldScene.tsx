@@ -3,7 +3,7 @@
 import { Suspense, useMemo, useRef, useEffect } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Stars, Sky } from "@react-three/drei";
-import { Vector3 } from "three";
+import { Color, Vector3 } from "three";
 import { useGameStore } from "@/src/state/useGameStore";
 import { clamp } from "@/src/systems/utils/math";
 import { BabyDino } from "@/src/three/characters/BabyDino";
@@ -154,29 +154,40 @@ function Controls() {
 function Lighting() {
   const dayLight = useGameStore((s) => s.dayLight);
   const phase = useGameStore((s) => s.dayPhase);
+  const isNight = phase === "night";
 
   // Clamp and bias to keep it cozy
   const sun = clamp(dayLight, 0, 1);
-  const ambient = 0.22 + sun * 0.45;
-  const dir = 0.15 + sun * 1.05;
+  const ambient = isNight ? 0.5 : 0.26 + sun * 0.42;
+  const dir = isNight ? 0.38 : 0.2 + sun * 1.0;
+  const hemiIntensity = isNight ? 0.6 : 0.22 + sun * 0.22;
 
   // Smoother sun position based on daylight
   // x: -8 (sunrise) to 8 (sunset), y: -1 (night) to 10 (noon), z: 6
   const sunX = (dayLight - 0.5) * 16;
-  const sunY = phase === "night" ? -1.5 : sun * 10;
+  const sunY = isNight ? 3.5 : sun * 10;
   const sunPos: [number, number, number] = [sunX, sunY, 6];
 
   return (
     <>
-      <ambientLight intensity={ambient} />
+      <ambientLight intensity={ambient} color={isNight ? "#b7c8ff" : "#ffffff"} />
+      <hemisphereLight
+        args={[isNight ? "#c9dcff" : "#f5fbff", isNight ? "#35506b" : "#4f7548", hemiIntensity]}
+      />
       <directionalLight
         position={sunPos}
         intensity={dir}
+        color={isNight ? "#b8cbff" : "#fff3d6"}
         castShadow
         shadow-mapSize-width={2048}
         shadow-mapSize-height={2048}
       />
-      {phase === "night" && <pointLight position={[0, 2.2, 0]} intensity={0.35} />}
+      {isNight && (
+        <>
+          <pointLight position={[0, 2.2, 0]} intensity={0.55} distance={18} color={"#9ebdff"} />
+          <pointLight position={[10, 1.8, 10]} intensity={0.8} distance={24} color={"#ffcc8a"} />
+        </>
+      )}
     </>
   );
 }
@@ -218,20 +229,32 @@ function WorldGround() {
 export function WorldScene() {
   const phase = useGameStore((s) => s.dayPhase);
   const dayLight = useGameStore((s) => s.dayLight);
+  const scene = useThree((s) => s.scene);
+  const isNight = phase === "night";
 
-  const fogColor = phase === "night" ? "#0a0a1a" : phase === "morning" ? "#ffecdb" : phase === "evening" ? "#ffae80" : "#d0f0ff";
-  const fogIntensity = phase === "night" ? 0.015 : 0.008;
+  const fogColor = isNight ? "#314c78" : phase === "morning" ? "#ffecdb" : phase === "evening" ? "#ffae80" : "#d0f0ff";
+  const fogIntensity = isNight ? 0.009 : 0.008;
+  const skySunY = isNight ? 2.5 : dayLight * 10;
+
+  useEffect(() => {
+    scene.background = new Color(isNight ? "#4f6f9f" : phase === "morning" ? "#ffe4c7" : phase === "evening" ? "#ffb27f" : "#bfe6ff");
+    return () => {
+      scene.background = null;
+    };
+  }, [scene, isNight, phase]);
 
   return (
     <group>
       <fogExp2 attach="fog" args={[fogColor, fogIntensity]} />
       
       <Sky 
-        sunPosition={[(dayLight - 0.5) * 16, phase === "night" ? -1 : dayLight * 10, 6]} 
-        turbidity={0.1}
-        rayleigh={phase === "night" ? 0.1 : 0.5}
+        sunPosition={[(dayLight - 0.5) * 16, skySunY, 6]}
+        turbidity={isNight ? 2.4 : 0.1}
+        rayleigh={isNight ? 1.2 : 0.5}
+        mieCoefficient={isNight ? 0.018 : 0.005}
+        mieDirectionalG={isNight ? 0.82 : 0.8}
       />
-      {phase === "night" && <Stars radius={80} depth={40} count={1800} factor={3} />}
+      {isNight && <Stars radius={80} depth={40} count={1800} factor={3.6} saturation={0.8} fade />}
 
       <Lighting />
 

@@ -158,7 +158,7 @@ function QuaterniusDinoModel({ activeAnimation }: { activeAnimation: DinoAnimati
     return () => { action.fadeOut(0.12); };
   }, [actions, names, activeAnimation]);
 
-  return <primitive ref={group} object={gltf.scene} />;
+  return <primitive ref={group} object={gltf.scene} rotation-y={Math.PI} />;
 }
 
 export function BabyDino({
@@ -189,6 +189,8 @@ export function BabyDino({
   const nextWanderAt = useRef<number>(0);
   const lastLookedAt = useRef<number>(0);
   const isLookingAtPlayer = useRef<boolean>(false);
+  const moveHeading = useRef<THREE.Vector3>(new THREE.Vector3(0, 0, 1));
+  const followSide = useRef<number>(1);
 
   const controlled = !!position;
 
@@ -200,6 +202,12 @@ export function BabyDino({
     }, 500);
     return () => window.clearTimeout(t);
   }, [moveSequenceId, playerTarget, controlled, setDinoDirective]);
+
+  useEffect(() => {
+    if (!controlled && playerTarget) {
+      followSide.current = Math.random() > 0.5 ? 1 : -1;
+    }
+  }, [controlled, moveSequenceId, playerTarget]);
 
   useFrame((state, delta) => {
     if (!group.current) return;
@@ -216,18 +224,18 @@ export function BabyDino({
       const p = new THREE.Vector3(playerPos.x, 0, playerPos.z);
       
       if (playerTarget) {
-        // Player is moving: dino stays to the side and slightly ahead
         const t = new THREE.Vector3(playerTarget.x, 0, playerTarget.z);
-        const dir = t.clone().sub(p).normalize();
-        const sideDir = new THREE.Vector3(-dir.z, 0, dir.x); // perpendicular
-        
-        const aheadDist = 2.2;
-        const sideDist = 1.8;
-        
-        const targetPos = p.clone()
-          .add(dir.multiplyScalar(aheadDist))
+        const travel = t.clone().sub(p);
+        const travelDir =
+          travel.lengthSq() > 0.0001 ? travel.normalize() : moveHeading.current.clone();
+        const sideDir = new THREE.Vector3(-travelDir.z, 0, travelDir.x);
+        const trailingDist = 1.55;
+        const sideDist = 1.35 * followSide.current;
+        const targetPos = p
+          .clone()
+          .add(travelDir.multiplyScalar(-trailingDist))
           .add(sideDir.multiplyScalar(sideDist));
-          
+
         desired.set(targetPos.x, 0, targetPos.z);
       } else {
         // Idle wandering logic
@@ -257,8 +265,12 @@ export function BabyDino({
     const distToDesired = desired.distanceTo(cur);
     const speed = controlled ? 0 : (playerTarget || directive.moveTarget) ? 3.5 : 1.2;
     const step = Math.min(distToDesired, speed * delta);
+    const moveDelta = desired.clone().sub(cur);
     if (distToDesired > 0.001) {
       cur.lerp(desired, clamp(step / Math.max(distToDesired, 0.0001), 0, 1));
+    }
+    if (moveDelta.lengthSq() > 0.0004) {
+      moveHeading.current.copy(moveDelta.normalize());
     }
 
     const bob = controlled ? 0 : Math.sin(Date.now() / 220) * 0.03;
@@ -285,15 +297,14 @@ export function BabyDino({
     const look = new THREE.Vector3();
     const shouldLookAtCamera = !!lookAtCamera || directive.animation === "look_at_camera" || isLookingAtPlayer.current;
     
-    if (shouldLookAtCamera) {
+    if (moveHeading.current.lengthSq() > 0.04 && distToDesired > 0.18) {
+      look.copy(group.current.position).add(moveHeading.current);
+    } else if (shouldLookAtCamera) {
       look.copy(camera.position);
-    } else if (playerTarget && !controlled) {
-      look.set(playerTarget.x, 0, playerTarget.z);
     } else if (directive.moveTarget) {
       look.set(directive.moveTarget.x, 0, directive.moveTarget.z);
     } else {
-      // Look where wandering
-      look.copy(desired);
+      look.copy(group.current.position).add(moveHeading.current);
     }
 
     const dir = look.clone().sub(group.current.position);

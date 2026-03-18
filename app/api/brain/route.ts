@@ -48,10 +48,7 @@ const schema = {
 export async function POST(req: Request) {
   const apiKey = process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
   if (!apiKey) {
-    return new Response(
-      JSON.stringify({ error: "Missing GEMINI_API_KEY (or GOOGLE_API_KEY) env var." }),
-      { status: 500 }
-    );
+    return Response.json({ mood: "calm", animation: "idle", shouldSpeak: false });
   }
 
   const body = (await req.json().catch(() => null)) as { context?: unknown } | null;

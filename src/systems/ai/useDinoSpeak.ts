@@ -2,6 +2,7 @@
 
 import { useCallback, useRef } from "react";
 import { geminiTts } from "@/src/systems/ai/aiClient";
+import { base64ToUint8Array } from "@/src/systems/utils/base64";
 import { wavBlobFromGeminiPcmBase64 } from "@/src/systems/utils/wav";
 
 type SpeakArgs = {
@@ -10,13 +11,21 @@ type SpeakArgs = {
   sceneHint?: "hatching" | "world";
 };
 
-const memoryCache = new Map<string, string>(); // text -> pcmBase64
+type CachedAudio = {
+  audioBase64: string;
+  mimeType: string;
+  sampleRate: number;
+  channels: number;
+};
+
+const memoryCache = new Map<string, CachedAudio>();
 
 const DEFAULT_VOICE = process.env.NEXT_PUBLIC_DINO_VOICE_NAME || "Leda";
 
 export function useDinoSpeak() {
   const lastSpokenAt = useRef<number>(0);
   const lastText = useRef<string>("");
+  const ttsDisabledUntil = useRef<number>(0);
 
   // Reuse a single audio element to avoid stacking too many
   const audioElRef = useRef<HTMLAudioElement | null>(null);
@@ -34,15 +43,35 @@ export function useDinoSpeak() {
 
     // Try Gemini TTS first (server route), fallback to browser TTS
     try {
-      let pcmBase64 = memoryCache.get(rawText) || null;
-      if (!pcmBase64) {
-        const tts = await geminiTts(rawText, DEFAULT_VOICE);
-        pcmBase64 = tts.audioBase64;
-        memoryCache.set(rawText, pcmBase64);
+      if (now < ttsDisabledUntil.current) {
+        throw new Error("Gemini TTS temporarily disabled");
       }
 
-      const wav = wavBlobFromGeminiPcmBase64(pcmBase64, 24000, 1);
-      const url = URL.createObjectURL(wav);
+      const cacheKey = `${DEFAULT_VOICE}::${rawText}`;
+      let cachedAudio = memoryCache.get(cacheKey) || null;
+      if (!cachedAudio) {
+        const tts = await geminiTts(rawText, DEFAULT_VOICE);
+        cachedAudio = {
+          audioBase64: tts.audioBase64,
+          mimeType: tts.mimeType || "audio/wav",
+          sampleRate: tts.sampleRate,
+          channels: tts.channels,
+        };
+        memoryCache.set(cacheKey, cachedAudio);
+      }
+
+      const audioBytes = base64ToUint8Array(cachedAudio.audioBase64);
+      const audioBytesCopy = new Uint8Array(audioBytes.length);
+      audioBytesCopy.set(audioBytes);
+      const audioBlob =
+        cachedAudio.mimeType === "audio/wav"
+          ? new Blob([audioBytesCopy], { type: "audio/wav" })
+          : wavBlobFromGeminiPcmBase64(
+              cachedAudio.audioBase64,
+              cachedAudio.sampleRate,
+              cachedAudio.channels
+            );
+      const url = URL.createObjectURL(audioBlob);
 
       let audio = audioElRef.current;
       if (!audio) {
@@ -62,6 +91,9 @@ export function useDinoSpeak() {
       window.setTimeout(() => URL.revokeObjectURL(url), 12_000);
       return;
     } catch (err) {
+      if ((err as Error)?.message !== "Gemini TTS temporarily disabled") {
+        ttsDisabledUntil.current = now + 60_000;
+      }
       // eslint-disable-next-line no-console
       console.warn("Gemini TTS failed; using browser speech synthesis.", err);
       if ("speechSynthesis" in window) {
