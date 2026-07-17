@@ -158,7 +158,7 @@ function QuaterniusDinoModel({ activeAnimation }: { activeAnimation: DinoAnimati
     return () => { action.fadeOut(0.12); };
   }, [actions, names, activeAnimation]);
 
-  return <primitive ref={group} object={gltf.scene} rotation-y={Math.PI} />;
+  return <primitive ref={group} object={gltf.scene} rotation-y={0} />;
 }
 
 export function BabyDino({
