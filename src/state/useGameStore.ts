@@ -52,6 +52,7 @@ export type GameEvent =
   | { t: number; type: "dino_investigate"; targetId: string };
 
 type GameState = {
+  activeSaveSlot: number | null;
   childName: string;
   scene: SceneName;
 
@@ -147,6 +148,8 @@ type GameState = {
 
   // Persistence
   hydrateFromStorage: () => void;
+  startNewGame: (slot: number) => void;
+  loadGame: (slot: number) => boolean;
 };
 
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
@@ -158,6 +161,7 @@ const defaultDirective: DinoDirective = {
 };
 
 export const useGameStore = create<GameState>((set, get) => ({
+  activeSaveSlot: null,
   childName: "Tucker",
   scene: "egg",
 
@@ -324,36 +328,62 @@ export const useGameStore = create<GameState>((set, get) => ({
   clearEvents: () => set({ recentEvents: [] }),
 
   hydrateFromStorage: () => {
+    // Save selection is handled explicitly by the kid-friendly slot screen.
+  },
+  startNewGame: (slot) => set({
+    activeSaveSlot: slot,
+    scene: "egg",
+    eggSelectedId: null,
+    playerPos: { x: 0, y: 0, z: 6 },
+    playerRotation: 0,
+    playerPitch: 0,
+    playerTarget: null,
+    dinoPos: { x: 0, y: 0, z: 3.5 },
+    dinoScale: 1,
+    dinoStats: { hunger: .8, cleanliness: .8, happiness: .9, xp: 0, growthStage: 1 },
+    campActive: false,
+    campPos: null,
+    recentEvents: [],
+  }),
+  loadGame: (slot) => {
     try {
-      const raw = localStorage.getItem("tucker_dino_save_v1");
-      if (!raw) return;
+      const raw = localStorage.getItem(`tucker_dino_save_${slot}`);
+      if (!raw) return false;
       const saved = JSON.parse(raw) as Partial<GameState>;
-      // Only restore safe/progression bits (not sensors).
       set((s) => ({
         ...s,
-        eggSelectedId: saved.eggSelectedId ?? s.eggSelectedId,
+        activeSaveSlot: slot,
+        scene: saved.scene ?? (saved.eggSelectedId !== null ? "world" : "egg"),
+        eggSelectedId: saved.eggSelectedId ?? null,
+        playerPos: saved.playerPos ?? { x: 0, y: 0, z: 6 },
+        playerRotation: saved.playerRotation ?? 0,
+        dinoPos: saved.dinoPos ?? { x: 0, y: 0, z: 3.5 },
         dinoStats: saved.dinoStats ?? s.dinoStats,
-        dinoScale: saved.dinoScale ?? s.dinoScale,
-        campActive: saved.campActive ?? s.campActive,
-        campPos: saved.campPos ?? s.campPos,
+        dinoScale: saved.dinoScale ?? 1,
+        campActive: saved.campActive ?? false,
+        campPos: saved.campPos ?? null,
       }));
-    } catch {
-      // ignore
-    }
+      return true;
+    } catch { return false; }
   },
 }));
 
 export function persistGame() {
   const s = useGameStore.getState();
+  if (s.activeSaveSlot === null) return;
   const save = {
+    scene: s.scene,
     eggSelectedId: s.eggSelectedId,
+    playerPos: s.playerPos,
+    playerRotation: s.playerRotation,
+    dinoPos: s.dinoPos,
     dinoStats: s.dinoStats,
     dinoScale: s.dinoScale,
     campActive: s.campActive,
     campPos: s.campPos,
   };
   try {
-    localStorage.setItem("tucker_dino_save_v1", JSON.stringify(save));
+    localStorage.setItem(`tucker_dino_save_${s.activeSaveSlot}`, JSON.stringify(save));
   } catch {
     // ignore
   }

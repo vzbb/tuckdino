@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useState } from "react";
 import dynamic from "next/dynamic";
 import { useGameStore, persistGame } from "@/src/state/useGameStore";
 import { HUD } from "@/src/ui/HUD";
@@ -18,12 +18,30 @@ const GameCanvas = dynamic(() => import("@/src/three/GameCanvas").then((m) => m.
 });
 
 export function GameApp() {
-  const hydrateFromStorage = useGameStore((s) => s.hydrateFromStorage);
+  const scene = useGameStore((s) => s.scene);
+  const startNewGame = useGameStore((s) => s.startNewGame);
+  const loadGame = useGameStore((s) => s.loadGame);
+  const [saveChosen, setSaveChosen] = useState(false);
+  const [slotInfo, setSlotInfo] = useState<Array<{ slot: number; exists: boolean; stage: number }>>([]);
+  const [introBeat, setIntroBeat] = useState(0);
 
-  // Hydrate once
   useEffect(() => {
-    hydrateFromStorage();
-  }, [hydrateFromStorage]);
+    setSlotInfo([1, 2, 3].map((slot) => {
+      try {
+        const raw = localStorage.getItem(`tucker_dino_save_${slot}`);
+        const saved = raw ? JSON.parse(raw) : null;
+        return { slot, exists: !!saved, stage: saved?.dinoStats?.growthStage ?? 1 };
+      } catch { return { slot, exists: false, stage: 1 }; }
+    }));
+  }, []);
+
+  useEffect(() => {
+    if (scene !== "egg" || !saveChosen) return;
+    setIntroBeat(0);
+    const first = window.setTimeout(() => setIntroBeat(1), 650);
+    const second = window.setTimeout(() => setIntroBeat(2), 2100);
+    return () => { window.clearTimeout(first); window.clearTimeout(second); };
+  }, [scene, saveChosen]);
 
   // Persist progression occasionally
   useEffect(() => {
@@ -81,9 +99,36 @@ export function GameApp() {
 
   return (
     <div id="game-root">
+      {(scene === "egg" || scene === "hatching") && <div className="egg-backdrop" />}
       <GameCanvas />
       <div className="overlay">
-        <HUD />
+        {saveChosen && <HUD />}
+        {saveChosen && scene === "egg" && (
+          <div className="story-dialogue">
+            <span className="story-speaker">TUCKER&apos;S ADVENTURE</span>
+            <strong>{introBeat < 1 ? "..." : introBeat < 2 ? "Whoa! Are these... dinosaur eggs?!" : "Which one do you want?"}</strong>
+          </div>
+        )}
+        {!saveChosen && (
+          <div className="save-screen">
+            <div className="save-card">
+              <div className="save-title"><span>🦕</span><div><small>WELCOME TO</small><strong>Tucker&apos;s Dino Day</strong></div></div>
+              <p>Pick an adventure!</p>
+              <div className="save-slots">
+                {slotInfo.map((info, index) => (
+                  <button key={info.slot} className={`save-slot slot-${index + 1}`} onClick={() => {
+                    if (info.exists) loadGame(info.slot); else startNewGame(info.slot);
+                    persistGame();
+                    setSaveChosen(true);
+                  }}>
+                    <span className="slot-egg">{info.exists ? "🦕" : "🥚"}</span>
+                    <span><strong>{info.exists ? `Dino Friend ${info.slot}` : "New Egg"}</strong><small>{info.exists ? `Growing stage ${info.stage}` : "Start a new adventure"}</small></span>
+                  </button>
+                ))}
+              </div>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );

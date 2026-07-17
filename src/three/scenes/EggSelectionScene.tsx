@@ -3,11 +3,9 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Group, Mesh } from "three";
 import { useFrame } from "@react-three/fiber";
-import { Sky } from "@react-three/drei";
 import { useGameStore } from "@/src/state/useGameStore";
 import { clamp } from "@/src/systems/utils/math";
 import { BabyDino } from "@/src/three/characters/BabyDino";
-import { useDinoSpeak } from "@/src/systems/ai/useDinoSpeak";
 
 type EggStyle = { base: string; accent: string; glow: string };
 
@@ -81,9 +79,9 @@ function Egg({
 function GladeGround() {
   return (
     <group>
-      <mesh rotation-x={-Math.PI / 2} receiveShadow>
-        <planeGeometry args={[60, 60]} />
-        <meshStandardMaterial color={"#2c5d3a"} roughness={1} />
+      <mesh rotation-x={-Math.PI / 2} receiveShadow position={[0, 0, 0]}>
+        <circleGeometry args={[7.5, 64]} />
+        <meshStandardMaterial color={"#e9c96f"} transparent opacity={0.48} roughness={1} />
       </mesh>
 
       {/* little “flowers” */}
@@ -113,7 +111,6 @@ function HatchingSequence() {
   const eggGroup = useRef<Group>(null);
   const [phase, setPhase] = useState<"wiggle" | "crack" | "dino">("wiggle");
   const [startedAt] = useState(() => Date.now());
-  const speak = useDinoSpeak();
 
   const style = EGG_STYLES[selectedId ?? 0] ?? EGG_STYLES[0];
 
@@ -124,15 +121,6 @@ function HatchingSequence() {
       markEggHatched();
     }, 2200);
 
-    const t3 = window.setTimeout(async () => {
-      // Baby dino introduction
-      await speak({
-        text: "Hi Tucker... I’m your baby dino!",
-        mood: "excited",
-        sceneHint: "hatching",
-      });
-    }, 2500);
-
     const t4 = window.setTimeout(() => {
       // auto transition to world after the moment lands
       setScene("world");
@@ -141,10 +129,9 @@ function HatchingSequence() {
     return () => {
       window.clearTimeout(t1);
       window.clearTimeout(t2);
-      window.clearTimeout(t3);
       window.clearTimeout(t4);
     };
-  }, [markEggHatched, setScene, speak]);
+  }, [markEggHatched, setScene]);
 
   useFrame(({ clock }) => {
     if (!eggGroup.current) return;
@@ -217,9 +204,7 @@ export function EggSelectionScene() {
 
   return (
     <group>
-      <Sky sunPosition={[3, 2, 1]} />
-
-      <ambientLight intensity={0.5} />
+      <ambientLight intensity={0.8} />
       <directionalLight
         position={[10, 12, 8]}
         intensity={1.2}

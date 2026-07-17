@@ -33,9 +33,9 @@ export function HUD() {
         </div>
       )}
 
-      {showHint && (
+      {showHint && scene !== "egg" && (
         <div className="play-hint">
-          {scene === "egg" ? "Tap an egg to meet your dino!" : "Tap the path to explore • Tap sparkly things!"}
+          {scene === "hatching" ? "Your new friend is hatching!" : "Tap the path to explore • Tap sparkly things!"}
         </div>
       )}
 
