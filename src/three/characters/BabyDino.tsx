@@ -7,6 +7,7 @@ import { useAnimations, useGLTF } from "@react-three/drei";
 import { AssetBoundary } from "@/src/three/components/AssetBoundary";
 import { useGameStore, type DinoAnimationKey } from "@/src/state/useGameStore";
 import { clamp, dampAngle } from "@/src/systems/utils/math";
+import { playerRenderPosition } from "@/src/three/characters/PlayerMarker";
 
 const BABY_DINO_GLB = "/assets/quaternius/Parasaurolophus.glb";
 
@@ -173,7 +174,6 @@ export function BabyDino({
   const setDinoPos = useGameStore((s) => s.setDinoPos);
   const dinoScale = useGameStore((s) => s.dinoScale);
   const directive = useGameStore((s) => s.dinoDirective);
-  const playerPos = useGameStore((s) => s.playerPos);
   const playerTarget = useGameStore((s) => s.playerTarget);
   const moveSequenceId = useGameStore((s) => s.moveSequenceId);
   const openMenu = useGameStore((s) => s.openRadialMenu);
@@ -183,6 +183,7 @@ export function BabyDino({
   const posRef = useRef<THREE.Vector3>(new THREE.Vector3(storeDinoPos.x, storeDinoPos.y, storeDinoPos.z));
   const lastStoreSync = useRef<number>(0);
   const [animKey, setAnimKey] = useState<DinoAnimationKey>("idle");
+  const animKeyRef = useRef<DinoAnimationKey>("idle");
 
   // Behavior state for wandering/attention
   const wanderOffset = useRef<THREE.Vector2>(new THREE.Vector2(0, 0));
@@ -221,7 +222,7 @@ export function BabyDino({
     } else if (directive.moveTarget) {
       desired.set(directive.moveTarget.x, 0, directive.moveTarget.z);
     } else {
-      const p = new THREE.Vector3(playerPos.x, 0, playerPos.z);
+      const p = playerRenderPosition.clone();
       
       if (playerTarget) {
         const t = new THREE.Vector3(playerTarget.x, 0, playerTarget.z);
@@ -315,7 +316,10 @@ export function BabyDino({
     if (!controlled && distToDesired > 0.1) {
       desiredAnim = (playerTarget || directive.moveTarget) ? "run" : "walk";
     }
-    setAnimKey(desiredAnim);
+    if (animKeyRef.current !== desiredAnim) {
+      animKeyRef.current = desiredAnim;
+      setAnimKey(desiredAnim);
+    }
 
     if (!controlled) {
       const storeNow = performance.now();

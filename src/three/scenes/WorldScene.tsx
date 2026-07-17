@@ -8,22 +8,20 @@ import { useGameStore } from "@/src/state/useGameStore";
 import { clamp } from "@/src/systems/utils/math";
 import { BabyDino } from "@/src/three/characters/BabyDino";
 import { PlayerMarker } from "@/src/three/characters/PlayerMarker";
+import { playerRenderPosition } from "@/src/three/characters/PlayerMarker";
 import { WorldProps } from "@/src/three/world/WorldProps";
 import { Camp } from "@/src/three/world/Camp";
 import { Collectibles } from "@/src/three/world/Collectibles";
 
 function FollowCamera() {
   const camera = useThree((s) => s.camera);
-  const playerPos = useGameStore((s) => s.playerPos);
-  const playerRotation = useGameStore((s) => s.playerRotation);
-  const playerPitch = useGameStore((s) => s.playerPitch);
-  const playerZoom = useGameStore((s) => s.playerZoom);
 
   const target = useMemo(() => new Vector3(), []);
 
   useFrame(() => {
+    const { playerRotation, playerPitch, playerZoom } = useGameStore.getState();
     // First person camera: at player position, looking in rotation direction
-    camera.position.set(playerPos.x, 1.4, playerPos.z);
+    camera.position.set(playerRenderPosition.x, 1.4, playerRenderPosition.z);
     
     // Default FOV is usually 75. Scale it by zoom factor.
     if ("fov" in camera) {
@@ -38,9 +36,9 @@ function FollowCamera() {
     const sinYaw = Math.sin(playerRotation);
 
     target.set(
-      playerPos.x + sinYaw * cosPitch,
+      playerRenderPosition.x + sinYaw * cosPitch,
       1.4 + sinPitch,
-      playerPos.z + cosYaw * cosPitch
+      playerRenderPosition.z + cosYaw * cosPitch
     );
     camera.lookAt(target);
   });
@@ -51,11 +49,8 @@ function FollowCamera() {
 function Controls() {
   const { gl } = useThree();
   const setPlayerRotation = useGameStore((s) => s.setPlayerRotation);
-  const playerRotation = useGameStore((s) => s.playerRotation);
   const setPlayerPitch = useGameStore((s) => s.setPlayerPitch);
-  const playerPitch = useGameStore((s) => s.playerPitch);
   const setPlayerZoom = useGameStore((s) => s.setPlayerZoom);
-  const playerZoom = useGameStore((s) => s.playerZoom);
 
   const isDragging = useRef(false);
   const lastX = useRef(0);
@@ -85,11 +80,12 @@ function Controls() {
         didMove.current = true;
         
         // Horizontal pan (yaw)
-        const newYaw = playerRotation - deltaX * 0.008;
+        const current = useGameStore.getState();
+        const newYaw = current.playerRotation - deltaX * 0.008;
         setPlayerRotation(newYaw);
 
         // Vertical tilt (pitch) - clamped to prevent flipping
-        const newPitch = clamp(playerPitch - deltaY * 0.006, -Math.PI / 3, Math.PI / 3);
+        const newPitch = clamp(current.playerPitch - deltaY * 0.006, -Math.PI / 3, Math.PI / 3);
         setPlayerPitch(newPitch);
       }
 
@@ -104,7 +100,7 @@ function Controls() {
     const onWheel = (e: WheelEvent) => {
       // Zoom in/out with mouse wheel
       const delta = e.deltaY * 0.001;
-      const newZoom = clamp(playerZoom + delta, 0.5, 2.0);
+      const newZoom = clamp(useGameStore.getState().playerZoom + delta, 0.5, 2.0);
       setPlayerZoom(newZoom);
     };
 
@@ -120,7 +116,7 @@ function Controls() {
 
         if (lastPinchDist.current !== null) {
           const delta = (lastPinchDist.current - dist) * 0.005;
-          const newZoom = clamp(playerZoom + delta, 0.5, 2.0);
+          const newZoom = clamp(useGameStore.getState().playerZoom + delta, 0.5, 2.0);
           setPlayerZoom(newZoom);
         }
         lastPinchDist.current = dist;
@@ -146,7 +142,7 @@ function Controls() {
       canvas.removeEventListener("touchmove", onTouchMove);
       canvas.removeEventListener("touchend", onTouchEnd);
     };
-  }, [gl, playerRotation, setPlayerRotation, playerPitch, setPlayerPitch, playerZoom, setPlayerZoom]);
+  }, [gl, setPlayerRotation, setPlayerPitch, setPlayerZoom]);
 
   return null;
 }
@@ -179,8 +175,8 @@ function Lighting() {
         intensity={dir}
         color={isNight ? "#b8cbff" : "#fff3d6"}
         castShadow
-        shadow-mapSize-width={2048}
-        shadow-mapSize-height={2048}
+        shadow-mapSize-width={1024}
+        shadow-mapSize-height={1024}
       />
       {isNight && (
         <>
@@ -226,6 +222,31 @@ function WorldGround() {
   );
 }
 
+function DistantLandscape() {
+  const peaks = useMemo(() => Array.from({ length: 24 }, (_, i) => {
+    const angle = (i / 24) * Math.PI * 2;
+    const radius = 61 + (i % 3) * 3;
+    return { x: Math.cos(angle) * radius, z: Math.sin(angle) * radius, scale: 6 + (i % 5) * 1.35, angle };
+  }), []);
+
+  return (
+    <group>
+      {peaks.map((peak, i) => (
+        <group key={i} position={[peak.x, -1.5, peak.z]} rotation-y={-peak.angle}>
+          <mesh scale={[1.45, 1, 1]}>
+            <coneGeometry args={[peak.scale, peak.scale * 1.8, 6]} />
+            <meshStandardMaterial color={i % 2 ? "#79a893" : "#6f9b8a"} roughness={1} flatShading />
+          </mesh>
+          <mesh position={[0, peak.scale * .63, 0]} scale={[1.46,.45,1.02]}>
+            <coneGeometry args={[peak.scale * .5, peak.scale * .72, 6]} />
+            <meshStandardMaterial color="#d9f0de" roughness={1} flatShading />
+          </mesh>
+        </group>
+      ))}
+    </group>
+  );
+}
+
 export function WorldScene() {
   const phase = useGameStore((s) => s.dayPhase);
   const dayLight = useGameStore((s) => s.dayLight);
@@ -260,6 +281,7 @@ export function WorldScene() {
 
       <Controls />
       <WorldGround />
+      <DistantLandscape />
 
       <WorldProps />
       <Collectibles />

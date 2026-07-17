@@ -6,6 +6,10 @@ import * as THREE from "three";
 import { useGameStore } from "@/src/state/useGameStore";
 import { clamp } from "@/src/systems/utils/math";
 
+// Render-time position stays outside React so the camera and companion can
+// follow at the display refresh rate while saves/UI sync less frequently.
+export const playerRenderPosition = new THREE.Vector3(0, 0, 6);
+
 /**
  * Manages player position and movement logic.
  * In FPS mode, this is the "camera source" and has no visible mesh.
@@ -22,6 +26,7 @@ export function PlayerMarker() {
   // keep local ref in sync if something external changes
   useEffect(() => {
     posRef.current.set(playerPos.x, playerPos.y, playerPos.z);
+    playerRenderPosition.copy(posRef.current);
   }, [playerPos.x, playerPos.y, playerPos.z]);
 
   useFrame((_, delta) => {
@@ -41,6 +46,8 @@ export function PlayerMarker() {
         clearTarget();
       }
     }
+
+    playerRenderPosition.copy(cur);
 
     const now = performance.now();
     if (now - lastStoreSync.current > 120) {

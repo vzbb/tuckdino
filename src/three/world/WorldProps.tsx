@@ -79,18 +79,8 @@ function BonfireModel() {
 }
 
 function Tree({ x, z, scale, rotation }: ScatterPoint) {
-  const groupRef = useRef<THREE.Group>(null);
-  const randomOffset = useMemo(() => Math.random() * 10, []);
-
-  useFrame((state) => {
-    if (!groupRef.current) return;
-    const t = state.clock.elapsedTime + randomOffset;
-    groupRef.current.rotation.z = Math.sin(t * 0.42) * 0.015;
-    groupRef.current.rotation.x = Math.cos(t * 0.36) * 0.012;
-  });
-
   return (
-    <group position={[x, 0, z]} scale={scale} rotation-y={rotation} ref={groupRef}>
+    <group position={[x, 0, z]} scale={scale} rotation-y={rotation}>
       <mesh position={[0, 0.1, 0]} receiveShadow>
         <cylinderGeometry args={[1.2, 1.6, 0.14, 18]} />
         <meshStandardMaterial color={"#3f5f39"} roughness={1} />
