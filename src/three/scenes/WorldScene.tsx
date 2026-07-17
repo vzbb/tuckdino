@@ -2,8 +2,8 @@
 
 import { Suspense, useMemo, useRef, useEffect } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
-import { Stars, Sky } from "@react-three/drei";
-import { Color, Vector3 } from "three";
+import { Stars, useTexture } from "@react-three/drei";
+import { BackSide, Color, SRGBColorSpace, Vector3 } from "three";
 import { useGameStore } from "@/src/state/useGameStore";
 import { clamp } from "@/src/systems/utils/math";
 import { BabyDino } from "@/src/three/characters/BabyDino";
@@ -222,28 +222,14 @@ function WorldGround() {
   );
 }
 
-function DistantLandscape() {
-  const peaks = useMemo(() => Array.from({ length: 24 }, (_, i) => {
-    const angle = (i / 24) * Math.PI * 2;
-    const radius = 61 + (i % 3) * 3;
-    return { x: Math.cos(angle) * radius, z: Math.sin(angle) * radius, scale: 6 + (i % 5) * 1.35, angle };
-  }), []);
-
+function HorizonPanorama() {
+  const texture = useTexture("/world-horizon.png");
+  texture.colorSpace = SRGBColorSpace;
   return (
-    <group>
-      {peaks.map((peak, i) => (
-        <group key={i} position={[peak.x, -1.5, peak.z]} rotation-y={-peak.angle}>
-          <mesh scale={[1.45, 1, 1]}>
-            <coneGeometry args={[peak.scale, peak.scale * 1.8, 6]} />
-            <meshStandardMaterial color={i % 2 ? "#79a893" : "#6f9b8a"} roughness={1} flatShading />
-          </mesh>
-          <mesh position={[0, peak.scale * .63, 0]} scale={[1.46,.45,1.02]}>
-            <coneGeometry args={[peak.scale * .5, peak.scale * .72, 6]} />
-            <meshStandardMaterial color="#d9f0de" roughness={1} flatShading />
-          </mesh>
-        </group>
-      ))}
-    </group>
+    <mesh position={[0, 0, 0]} rotation-y={Math.PI * .12}>
+      <sphereGeometry args={[74, 64, 32]} />
+      <meshBasicMaterial map={texture} side={BackSide} fog={false} toneMapped={false} />
+    </mesh>
   );
 }
 
@@ -255,7 +241,6 @@ export function WorldScene() {
 
   const fogColor = isNight ? "#314c78" : phase === "morning" ? "#ffecdb" : phase === "evening" ? "#ffae80" : "#d0f0ff";
   const fogIntensity = isNight ? 0.007 : 0.0055;
-  const skySunY = isNight ? 2.5 : dayLight * 10;
 
   useEffect(() => {
     scene.background = new Color(isNight ? "#536fa3" : phase === "morning" ? "#ffe8c9" : phase === "evening" ? "#ffb982" : "#aee8ff");
@@ -268,20 +253,13 @@ export function WorldScene() {
     <group>
       <fogExp2 attach="fog" args={[fogColor, fogIntensity]} />
       
-      <Sky 
-        sunPosition={[(dayLight - 0.5) * 16, skySunY, 6]}
-        turbidity={isNight ? 2.4 : 0.1}
-        rayleigh={isNight ? 1.2 : 0.5}
-        mieCoefficient={isNight ? 0.018 : 0.005}
-        mieDirectionalG={isNight ? 0.82 : 0.8}
-      />
+      {!isNight && <HorizonPanorama />}
       {isNight && <Stars radius={80} depth={40} count={1800} factor={3.6} saturation={0.8} fade />}
 
       <Lighting />
 
       <Controls />
       <WorldGround />
-      <DistantLandscape />
 
       <WorldProps />
       <Collectibles />

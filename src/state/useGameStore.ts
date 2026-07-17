@@ -160,6 +160,9 @@ const defaultDirective: DinoDirective = {
   shouldSpeak: false,
 };
 
+const HOME_SPAWN: Vec3 = { x: 0, y: 0, z: -2 };
+const HOME_DINO_SPAWN: Vec3 = { x: 1.5, y: 0, z: 0.2 };
+
 export const useGameStore = create<GameState>((set, get) => ({
   activeSaveSlot: null,
   childName: "Tucker",
@@ -167,14 +170,14 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   eggSelectedId: null,
 
-  playerPos: { x: 0, y: 0, z: 6 },
+  playerPos: { ...HOME_SPAWN },
   playerRotation: 0,
   playerPitch: 0,
   playerZoom: 1.25, // default slightly zoomed out
   playerTarget: null,
   moveSequenceId: 0,
 
-  dinoPos: { x: 0, y: 0, z: 3.5 },
+  dinoPos: { ...HOME_DINO_SPAWN },
   dinoScale: 1,
   dinoColor: "#7affc8", // default minty green
   dinoStats: {
@@ -334,11 +337,11 @@ export const useGameStore = create<GameState>((set, get) => ({
     activeSaveSlot: slot,
     scene: "egg",
     eggSelectedId: null,
-    playerPos: { x: 0, y: 0, z: 6 },
+    playerPos: { ...HOME_SPAWN },
     playerRotation: 0,
     playerPitch: 0,
     playerTarget: null,
-    dinoPos: { x: 0, y: 0, z: 3.5 },
+    dinoPos: { ...HOME_DINO_SPAWN },
     dinoScale: 1,
     dinoStats: { hunger: .8, cleanliness: .8, happiness: .9, xp: 0, growthStage: 1 },
     campActive: false,
@@ -355,9 +358,10 @@ export const useGameStore = create<GameState>((set, get) => ({
         activeSaveSlot: slot,
         scene: saved.scene ?? (saved.eggSelectedId !== null ? "world" : "egg"),
         eggSelectedId: saved.eggSelectedId ?? null,
-        playerPos: saved.playerPos ?? { x: 0, y: 0, z: 6 },
-        playerRotation: saved.playerRotation ?? 0,
-        dinoPos: saved.dinoPos ?? { x: 0, y: 0, z: 3.5 },
+        playerPos: { ...HOME_SPAWN },
+        playerRotation: 0,
+        playerTarget: null,
+        dinoPos: { ...HOME_DINO_SPAWN },
         dinoStats: saved.dinoStats ?? s.dinoStats,
         dinoScale: saved.dinoScale ?? 1,
         campActive: saved.campActive ?? false,

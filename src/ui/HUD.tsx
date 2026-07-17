@@ -7,7 +7,6 @@ import { RadialMenu } from "@/src/ui/RadialMenu";
 export function HUD() {
   const scene = useGameStore((s) => s.scene);
   const radialOpen = useGameStore((s) => s.radialMenuOpen);
-  const dayPhase = useGameStore((s) => s.dayPhase);
   const recentEvents = useGameStore((s) => s.recentEvents);
   const lastEvent = recentEvents[recentEvents.length - 1];
   const [showHint, setShowHint] = useState(true);
@@ -18,15 +17,8 @@ export function HUD() {
     return () => window.clearTimeout(timer);
   }, [scene]);
 
-  const phaseEmoji = dayPhase === "morning" ? "🌅" : dayPhase === "afternoon" ? "☀️" : dayPhase === "evening" ? "🌇" : "🌙";
-
   return (
     <>
-      <div className="game-topbar">
-        <div className="adventure-badge"><span>🦕</span><span>Tucker&apos;s Dino Day</span></div>
-        <div className="day-badge"><span>{phaseEmoji}</span><span>{dayPhase}</span></div>
-      </div>
-
       {scene === "world" && lastEvent?.type === "collectible_found" && (
         <div className="discovery-toast" key={`${lastEvent.id}-${lastEvent.t}`}>
           <span>✨</span><strong>{lastEvent.id.replaceAll("_", " ")}</strong>

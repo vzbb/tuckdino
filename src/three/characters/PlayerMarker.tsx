@@ -8,7 +8,7 @@ import { clamp } from "@/src/systems/utils/math";
 
 // Render-time position stays outside React so the camera and companion can
 // follow at the display refresh rate while saves/UI sync less frequently.
-export const playerRenderPosition = new THREE.Vector3(0, 0, 6);
+export const playerRenderPosition = new THREE.Vector3(0, 0, -2);
 
 /**
  * Manages player position and movement logic.

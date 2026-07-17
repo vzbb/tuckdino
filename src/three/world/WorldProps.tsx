@@ -9,6 +9,7 @@ import { useGameStore } from "@/src/state/useGameStore";
 
 const TENT_GLB = "/assets/quaternius/Tent.glb";
 const BONFIRE_GLB = "/assets/quaternius/Bonfire.glb";
+const HOME_FIRE = { x: 4.2, z: 8.4 };
 
 type ScatterPoint = {
   x: number;
@@ -80,7 +81,7 @@ function BonfireModel() {
 
 function Tree({ x, z, scale, rotation }: ScatterPoint) {
   return (
-    <group position={[x, 0, z]} scale={scale} rotation-y={rotation}>
+    <group position={[x, 0, z]} scale={scale * 1.75} rotation-y={rotation}>
       <mesh position={[0, 0.1, 0]} receiveShadow>
         <cylinderGeometry args={[1.2, 1.6, 0.14, 18]} />
         <meshStandardMaterial color={"#3f5f39"} roughness={1} />
@@ -120,7 +121,7 @@ function Campfire() {
   });
 
   return (
-    <group position={[10, 0, 10]}>
+    <group position={[HOME_FIRE.x, 0, HOME_FIRE.z]}>
       <group ref={flameRef} scale={0.8} position={[0, 0.06, 0]}>
         <AssetBoundary fallback={<FallbackBonfire />}>
           <Suspense fallback={<FallbackBonfire />}>
@@ -251,9 +252,57 @@ function PlayZones() {
   );
 }
 
+function MeadowStructure() {
+  const path = [
+    { x: 0, z: 7, r: -.08 }, { x: -.5, z: 4.5, r: .12 }, { x: .2, z: 2, r: -.16 },
+    { x: 1.2, z: -.5, r: -.28 }, { x: 1.4, z: -3.2, r: .08 }, { x: .6, z: -6, r: .2 },
+    { x: -.6, z: -8.6, r: .32 },
+  ];
+  return (
+    <group>
+      {path.map((p, i) => (
+        <mesh key={i} position={[p.x, .018, p.z]} rotation={[-Math.PI/2, 0, p.r]} scale={[1.25, 2.15, 1]} raycast={() => {}}>
+          <circleGeometry args={[1, 24]} />
+          <meshStandardMaterial color={i % 2 ? "#d7b875" : "#e2c682"} roughness={1} polygonOffset polygonOffsetFactor={-2} />
+        </mesh>
+      ))}
+      {[[-8,5,4.5],[8,4,5.5],[-9,-6,3.8],[9,-8,4.2]].map(([x,z,s],i) => (
+        <mesh key={`patch-${i}`} position={[x,.012,z]} rotation-x={-Math.PI/2} scale={[s,s*.72,1]} raycast={() => {}}>
+          <circleGeometry args={[1,24]} />
+          <meshStandardMaterial color={i%2 ? "#79b966" : "#4f914f"} roughness={1} polygonOffset polygonOffsetFactor={-1} />
+        </mesh>
+      ))}
+    </group>
+  );
+}
+
+function HomeRanch() {
+  const fence = [
+    [-7, 11], [-5.2, 11.7], [-3.4, 12.2], [3.2, 12.2], [5.2, 11.5], [7, 10.5],
+  ];
+  return (
+    <group>
+      {fence.map(([x,z],i) => (
+        <group key={i} position={[x,0,z]} rotation-y={(i-2)*.08}>
+          <mesh position={[0,.45,0]} castShadow><cylinderGeometry args={[.09,.12,.9,7]} /><meshStandardMaterial color="#8b5b34" roughness={1} /></mesh>
+          {i < fence.length-1 && <mesh position={[.9,.52,0]} rotation-z={Math.PI/2} castShadow><cylinderGeometry args={[.055,.07,1.8,7]} /><meshStandardMaterial color="#a76d3e" roughness={1} /></mesh>}
+        </group>
+      ))}
+      <group position={[-2.2,0,8.8]}>
+        <mesh position={[0,.34,0]} castShadow><boxGeometry args={[1.8,.35,.65]} /><meshStandardMaterial color="#a96e3d" roughness={1} /></mesh>
+        <mesh position={[0,.55,0]} castShadow><boxGeometry args={[1.55,.18,.48]} /><meshStandardMaterial color="#76a95a" roughness={1} /></mesh>
+      </group>
+      <group position={[0,0,12.4]}>
+        <mesh position={[0,.8,0]} castShadow><cylinderGeometry args={[.11,.14,1.6,8]} /><meshStandardMaterial color="#70482d" /></mesh>
+        <mesh position={[0,1.35,0]} castShadow><boxGeometry args={[2.4,.72,.18]} /><meshStandardMaterial color="#e6c178" roughness={.9} /></mesh>
+      </group>
+    </group>
+  );
+}
+
 export function WorldProps() {
-  const treePoints = useMemo(() => makeScatter(40, 33, 12), []);
-  const hillPoints = useMemo(() => makeScatter(18, 36, 18), []);
+  const treePoints = useMemo(() => makeScatter(48, 42, 15), []);
+  const hillPoints = useMemo(() => makeScatter(8, 40, 24), []);
   const flowerPoints = useMemo(() => makeScatter(120, 11), []);
   const pebblePoints = useMemo(() => makeScatter(24, 8, 2), []);
   const lanternPoints = useMemo(() => makeScatter(9, 7, 3), []);
@@ -262,8 +311,10 @@ export function WorldProps() {
     <group>
       <Butterflies />
       <PlayZones />
+      <MeadowStructure />
+      <HomeRanch />
 
-      <group position={[15.5, 0, 16.5]} rotation-y={-0.55} scale={0.28}>
+      <group position={[-5.2, 0, 9.8]} rotation-y={0.45} scale={0.32}>
         <AssetBoundary fallback={<FallbackTent />}>
           <Suspense fallback={<FallbackTent />}>
             <TentModel />
@@ -311,7 +362,7 @@ export function WorldProps() {
       {pebblePoints.map((point, i) => (
         <mesh
           key={`camp-pebble-${i}`}
-          position={[10 + point.x * 0.35, 0.06, 10 + point.z * 0.35]}
+          position={[HOME_FIRE.x + point.x * 0.35, 0.06, HOME_FIRE.z + point.z * 0.35]}
           rotation-y={point.rotation}
           castShadow
           receiveShadow
@@ -322,7 +373,7 @@ export function WorldProps() {
       ))}
 
       {lanternPoints.map((point, i) => (
-        <group key={`lantern-${i}`} position={[10 + point.x * 0.5, 0, 10 + point.z * 0.5]} rotation-y={point.rotation} scale={0.55 + (i % 3) * 0.12}>
+        <group key={`lantern-${i}`} position={[HOME_FIRE.x + point.x * 0.5, 0, HOME_FIRE.z + point.z * 0.5]} rotation-y={point.rotation} scale={0.55 + (i % 3) * 0.12}>
           <mesh position={[0, 0.32, 0]} castShadow>
             <cylinderGeometry args={[0.03, 0.04, 0.64, 6]} />
             <meshStandardMaterial color={"#6f5336"} roughness={0.95} />
