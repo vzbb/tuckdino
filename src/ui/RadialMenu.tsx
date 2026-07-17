@@ -1,8 +1,7 @@
 "use client";
 
-import { useMemo, useState, useEffect } from "react";
-import { useGameStore, type DinoAction } from "@/src/state/useGameStore";
-import { useDinoSpeak } from "@/src/systems/ai/useDinoSpeak";
+import { useMemo } from "react";
+import { useGameStore } from "@/src/state/useGameStore";
 
 function ActionButton({
   emoji,
@@ -46,10 +45,8 @@ export function RadialMenu() {
   const isOpen = useGameStore((s) => s.radialMenuOpen);
   const close = useGameStore((s) => s.closeRadialMenu);
   const apply = useGameStore((s) => s.applyDinoAction);
-  const name = useGameStore((s) => s.childName);
   const campActive = useGameStore((s) => s.campActive);
 
-  const speak = useDinoSpeak();
 
   const actions = useMemo(
     () =>
@@ -62,21 +59,6 @@ export function RadialMenu() {
       ] as const,
     [campActive]
   );
-
-  const quickPhrase = (a: DinoAction) => {
-    switch (a) {
-      case "pet":
-        return `${name}! That feels nice!`;
-      case "feed":
-        return `Yum yum, ${name}!`;
-      case "bathe":
-        return `Splash splash, ${name}!`;
-      case "play":
-        return `Play time, ${name}!`;
-      case "camp":
-        return campActive ? `All packed up, ${name}!` : `Camp time, ${name}!`;
-    }
-  };
 
   if (!isOpen) return null;
 
@@ -169,10 +151,9 @@ export function RadialMenu() {
                 key={a.action}
                 emoji={a.emoji}
                 label={a.label}
-                onClick={async () => {
+                onClick={() => {
                   close();
                   apply(a.action);
-                  await speak({ text: quickPhrase(a.action), mood: "playful", sceneHint: "world" });
                 }}
               />
             ))}

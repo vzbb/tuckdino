@@ -229,7 +229,7 @@ export function BabyDino({
         const travelDir =
           travel.lengthSq() > 0.0001 ? travel.normalize() : moveHeading.current.clone();
         const sideDir = new THREE.Vector3(-travelDir.z, 0, travelDir.x);
-        const trailingDist = 1.55;
+        const trailingDist = -1.15;
         const sideDist = 1.35 * followSide.current;
         const targetPos = p
           .clone()
@@ -247,7 +247,7 @@ export function BabyDino({
           );
         }
 
-        const offsetDist = 4.0;
+        const offsetDist = 2.8;
         const baseOffset = new THREE.Vector3(
           Math.sin(playerRotation) * offsetDist,
           0,

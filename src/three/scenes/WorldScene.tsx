@@ -221,7 +221,7 @@ function WorldGround() {
       }}
     >
       <planeGeometry args={[140, 140, 1, 1]} />
-      <meshStandardMaterial color={"#2b5a38"} roughness={0.8} />
+      <meshStandardMaterial color={"#65a957"} roughness={0.92} />
     </mesh>
   );
 }
@@ -233,11 +233,11 @@ export function WorldScene() {
   const isNight = phase === "night";
 
   const fogColor = isNight ? "#314c78" : phase === "morning" ? "#ffecdb" : phase === "evening" ? "#ffae80" : "#d0f0ff";
-  const fogIntensity = isNight ? 0.009 : 0.008;
+  const fogIntensity = isNight ? 0.007 : 0.0055;
   const skySunY = isNight ? 2.5 : dayLight * 10;
 
   useEffect(() => {
-    scene.background = new Color(isNight ? "#4f6f9f" : phase === "morning" ? "#ffe4c7" : phase === "evening" ? "#ffb27f" : "#bfe6ff");
+    scene.background = new Color(isNight ? "#536fa3" : phase === "morning" ? "#ffe8c9" : phase === "evening" ? "#ffb982" : "#aee8ff");
     return () => {
       scene.background = null;
     };

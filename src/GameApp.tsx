@@ -3,8 +3,6 @@ import dynamic from "next/dynamic";
 import { useGameStore, persistGame } from "@/src/state/useGameStore";
 import { HUD } from "@/src/ui/HUD";
 import { useDayNightSync } from "@/src/systems/time/useDayNightSync";
-import { useGeminiSensorLoops } from "@/src/systems/ai/useGeminiSensorLoops";
-import { useDinoBrainLoop } from "@/src/systems/ai/useDinoBrainLoop";
 
 declare global {
   interface Window {
@@ -36,11 +34,8 @@ export function GameApp() {
   // Time sync + lighting
   useDayNightSync();
 
-  // Camera/mic → Gemini → store(face/speech)
-  useGeminiSensorLoops();
-
-  // Dino directive brain loop
-  useDinoBrainLoop();
+  // Voice, camera and cloud-brain loops are intentionally paused while the
+  // tactile world and companion play loop are being developed.
 
   useEffect(() => {
     window.render_game_to_text = () => {

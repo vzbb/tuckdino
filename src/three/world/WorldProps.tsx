@@ -1,10 +1,11 @@
 "use client";
 
-import { Suspense, useMemo, useRef } from "react";
+import { Suspense, useMemo, useRef, useState } from "react";
 import { useGLTF } from "@react-three/drei";
 import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { AssetBoundary } from "@/src/three/components/AssetBoundary";
+import { useGameStore } from "@/src/state/useGameStore";
 
 const TENT_GLB = "/assets/quaternius/Tent.glb";
 const BONFIRE_GLB = "/assets/quaternius/Bonfire.glb";
@@ -203,6 +204,63 @@ function Butterflies() {
   );
 }
 
+function PlayZones() {
+  const pushEvent = useGameStore((s) => s.pushEvent);
+  const setMoveTarget = useGameStore((s) => s.setMoveTarget);
+  const [active, setActive] = useState("welcome");
+  const crystal = useRef<THREE.Group>(null);
+  const mushrooms = useRef<THREE.Group>(null);
+
+  useFrame((state) => {
+    const t = state.clock.elapsedTime;
+    if (crystal.current) crystal.current.rotation.y = t * 0.35;
+    if (mushrooms.current) mushrooms.current.position.y = Math.sin(t * 3) * 0.05;
+  });
+
+  const discover = (id: string, x: number, z: number) => {
+    setActive(id);
+    setMoveTarget({ x, y: 0, z });
+    pushEvent({ t: Date.now(), type: "collectible_found", id });
+  };
+
+  return (
+    <group>
+      <group position={[-12, 0, 2]} onPointerDown={(e) => { e.stopPropagation(); discover("singing_mushrooms", -12, 2); }} ref={mushrooms}>
+        {[-1.1, 0, 1.05].map((x, i) => (
+          <group key={x} position={[x, 0, (i % 2) * .45]} scale={.85 + i * .18}>
+            <mesh position={[0, .35, 0]} castShadow><cylinderGeometry args={[.13,.2,.7,10]} /><meshStandardMaterial color="#f7e7c6" /></mesh>
+            <mesh position={[0,.78,0]} castShadow><sphereGeometry args={[.48,18,10,0,Math.PI*2,0,Math.PI/2]} /><meshStandardMaterial color={i === 0 ? "#ff718f" : i === 1 ? "#a978ff" : "#ffb64c"} emissive={active === "singing_mushrooms" ? "#ff9bc4" : "#321630"} emissiveIntensity={active === "singing_mushrooms" ? .8 : .12} /></mesh>
+          </group>
+        ))}
+        <pointLight position={[0,1.2,0]} color="#ff83d2" intensity={active === "singing_mushrooms" ? 2 : .35} distance={8} />
+      </group>
+
+      <group position={[13, 0, -4]} onPointerDown={(e) => { e.stopPropagation(); discover("rainbow_crystal", 13, -4); }} ref={crystal}>
+        {[0,1,2,3,4].map((i) => (
+          <mesh key={i} position={[(i-2)*.35, .55 + (i%2)*.25, (i%2)*.28]} rotation-z={(i-2)*.12} castShadow>
+            <octahedronGeometry args={[.42 + (i%2)*.18,0]} />
+            <meshStandardMaterial color={["#69e7ff","#b98cff","#ff86bf","#8cf7b1","#ffe36f"][i]} emissive={["#4edcff","#9d67ff","#ff5eac","#57e58c","#ffd83f"][i]} emissiveIntensity={active === "rainbow_crystal" ? 1.2 : .35} roughness={.2} metalness={.15} />
+          </mesh>
+        ))}
+        <pointLight position={[0,1,0]} color="#aeefff" intensity={active === "rainbow_crystal" ? 2.4 : .6} distance={10} />
+      </group>
+
+      <group position={[-5, 0, -17]} onPointerDown={(e) => { e.stopPropagation(); discover("splashy_stepping_stones", -5, -12); }}>
+        {Array.from({length: 7}).map((_,i) => (
+          <mesh key={i} position={[i*1.55, .16 + (active === "splashy_stepping_stones" ? Math.sin(i)*.05 : 0), (i%2)*1.2]} scale={[1.2,.28,.85]} castShadow>
+            <sphereGeometry args={[.65,14,8]} /><meshStandardMaterial color={i%2 ? "#b9ddd1" : "#f5d9a6"} roughness={.8} />
+          </mesh>
+        ))}
+      </group>
+
+      <group position={[4,0,9]} onPointerDown={(e) => { e.stopPropagation(); discover("berry_picnic", 4, 9); }}>
+        <mesh position={[0,.05,0]} rotation-x={-Math.PI/2} receiveShadow><circleGeometry args={[2.2,32]} /><meshStandardMaterial color="#ffd46e" /></mesh>
+        {[[-1,.5],[.2,-.6],[1,.55]].map(([x,z],i) => <mesh key={i} position={[x,.24,z]} castShadow><sphereGeometry args={[.24,12,10]} /><meshStandardMaterial color={i===1?"#6843b7":"#e64f71"} emissive="#a52f55" emissiveIntensity={.2} /></mesh>)}
+      </group>
+    </group>
+  );
+}
+
 export function WorldProps() {
   const treePoints = useMemo(() => makeScatter(40, 33, 12), []);
   const hillPoints = useMemo(() => makeScatter(18, 36, 18), []);
@@ -213,6 +271,7 @@ export function WorldProps() {
   return (
     <group>
       <Butterflies />
+      <PlayZones />
 
       <group position={[15.5, 0, 16.5]} rotation-y={-0.55} scale={0.28}>
         <AssetBoundary fallback={<FallbackTent />}>
@@ -224,7 +283,7 @@ export function WorldProps() {
 
       <mesh rotation-x={-Math.PI / 2} position={[0, 0.02, -15]} receiveShadow>
         <planeGeometry args={[60, 10]} />
-        <meshStandardMaterial color={"#3d96cf"} emissive={"#1d5f8b"} emissiveIntensity={0.12} roughness={0.2} metalness={0.1} />
+        <meshStandardMaterial color={"#54bde0"} emissive={"#248eb7"} emissiveIntensity={0.2} roughness={0.15} metalness={0.05} />
       </mesh>
 
       {Array.from({ length: 18 }).map((_, i) => (
