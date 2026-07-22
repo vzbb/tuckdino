@@ -2,8 +2,8 @@ import type { Metadata } from "next";
 import "./globals.css";
 
 export const metadata: Metadata = {
-  title: "Tucker & Baby Dino",
-  description: "A cozy 3D companion adventure for Tucker 🦕",
+  title: "Rawrcade",
+  description: "Raise a dinosaur. Train together. Explore a wild little world.",
 };
 
 export default function RootLayout({

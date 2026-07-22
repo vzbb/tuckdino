@@ -28,7 +28,7 @@ export function GameApp() {
   useEffect(() => {
     setSlotInfo([1, 2, 3].map((slot) => {
       try {
-        const raw = localStorage.getItem(`tucker_dino_save_${slot}`);
+        const raw = localStorage.getItem(`rawrcade_save_${slot}`) ?? localStorage.getItem(`tucker_dino_save_${slot}`);
         const saved = raw ? JSON.parse(raw) : null;
         return { slot, exists: !!saved, stage: saved?.dinoStats?.growthStage ?? 1 };
       } catch { return { slot, exists: false, stage: 1 }; }
@@ -74,6 +74,7 @@ export function GameApp() {
           directive: s.dinoDirective.animation,
           stats: s.dinoStats,
         },
+        adventure: s.adventure,
         camp: {
           active: s.campActive,
           pos: s.campPos,
@@ -105,14 +106,14 @@ export function GameApp() {
         {saveChosen && <HUD />}
         {saveChosen && scene === "egg" && (
           <div className="story-dialogue">
-            <span className="story-speaker">TUCKER&apos;S ADVENTURE</span>
+            <span className="story-speaker">A RAWRCADE ADVENTURE</span>
             <strong>{introBeat < 1 ? "..." : introBeat < 2 ? "Whoa! Are these... dinosaur eggs?!" : "Which one do you want?"}</strong>
           </div>
         )}
         {!saveChosen && (
           <div className="save-screen">
             <div className="save-card">
-              <div className="save-title"><span>🦕</span><div><small>WELCOME TO</small><strong>Tucker&apos;s Dino Day</strong></div></div>
+              <div className="save-title"><span>🦕</span><div><small>WELCOME TO</small><strong>rawrcade</strong></div></div>
               <p>Pick an adventure!</p>
               <div className="save-slots">
                 {slotInfo.map((info, index) => (

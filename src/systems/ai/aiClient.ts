@@ -8,7 +8,7 @@ export type AudioResult = {
   intent:
     | "greeting"
     | "calling_dino"
-    | "saying_tucker"
+    | "saying_name"
     | "excited"
     | "random"
     | "unknown";

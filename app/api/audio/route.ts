@@ -18,7 +18,7 @@ const schema = {
       enum: [
         "greeting",
         "calling_dino",
-        "saying_tucker",
+        "saying_name",
         "excited",
         "random",
         "unknown",
@@ -54,7 +54,7 @@ export async function POST(req: Request) {
     "Do your best to transcribe the speech. The toddler may speak in broken sentences.",
     "",
     "Then detect an intent label from this set:",
-    "greeting, calling_dino, saying_tucker, excited, random, unknown",
+    "greeting, calling_dino, saying_name, excited, random, unknown",
     "",
     "Also estimate excitement_level from 0..1.",
     "",

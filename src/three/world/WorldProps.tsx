@@ -300,6 +300,29 @@ function HomeRanch() {
   );
 }
 
+function TrainingAndBattleGround() {
+  const mode = useGameStore((s) => s.adventure.mode);
+  const pulse = useRef<THREE.Group>(null);
+  useFrame((state) => {
+    if (pulse.current) pulse.current.rotation.y = Math.sin(state.clock.elapsedTime * .8) * .08;
+  });
+  return <group>
+    <group position={[-8,0,8]}>
+      <mesh position={[0,.035,0]} rotation-x={-Math.PI/2} receiveShadow><ringGeometry args={[2.5,3.05,40]} /><meshStandardMaterial color="#e7c268" roughness={1} /></mesh>
+      {Array.from({length:8}).map((_,i)=><mesh key={i} position={[Math.cos(i*Math.PI/4)*2.8,.12,Math.sin(i*Math.PI/4)*2.8]} rotation={[0,i*Math.PI/4,Math.PI/2]} castShadow><cylinderGeometry args={[.13,.17,1.1,8]} /><meshStandardMaterial color="#9a6137" /></mesh>)}
+      <group ref={pulse}>
+        <mesh position={[-.9,.26,0]} rotation-z={Math.PI/2} castShadow><cylinderGeometry args={[.25,.3,1.7,10]} /><meshStandardMaterial color="#8a5635" /></mesh>
+        {[[-1.2,.35],[-.55,-.65],[.55,-.8]].map(([x,z],i)=><mesh key={i} position={[x,.15,z]} castShadow><coneGeometry args={[.22,.55,8]} /><meshStandardMaterial color={i===0?"#ffc952":"#f58d4e"} /></mesh>)}
+      </group>
+      <pointLight position={[0,1,0]} color="#ffd276" intensity={mode==="training"?1.5:.35} distance={8}/>
+    </group>
+    <group position={[0,0,-25]}>
+      <mesh position={[0,.025,0]} rotation-x={-Math.PI/2}><circleGeometry args={[6,48]} /><meshStandardMaterial color={mode==="battle"||mode==="victory"?"#91b45c":"#6fa556"} /></mesh>
+      {[-5.8,5.8].map((x)=><group key={x} position={[x,0,0]}><mesh position={[0,1.2,0]}><cylinderGeometry args={[.18,.25,2.4,8]}/><meshStandardMaterial color="#765035"/></mesh><mesh position={[0,2.15,0]}><sphereGeometry args={[.5,12,10]}/><meshStandardMaterial color="#ffd35e" emissive="#ff9d39" emissiveIntensity={mode==="battle"?1:.2}/></mesh></group>)}
+    </group>
+  </group>;
+}
+
 export function WorldProps() {
   const treePoints = useMemo(() => makeScatter(48, 42, 15), []);
   const hillPoints = useMemo(() => makeScatter(8, 40, 24), []);
@@ -313,6 +336,7 @@ export function WorldProps() {
       <PlayZones />
       <MeadowStructure />
       <HomeRanch />
+      <TrainingAndBattleGround />
 
       <group position={[-5.2, 0, 9.8]} rotation-y={0.45} scale={0.32}>
         <AssetBoundary fallback={<FallbackTent />}>

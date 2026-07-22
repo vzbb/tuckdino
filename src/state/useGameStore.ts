@@ -3,13 +3,15 @@ import { create } from "zustand";
 export type Vec3 = { x: number; y: number; z: number };
 
 export type SceneName = "egg" | "hatching" | "world";
+export type AdventureMode = "explore" | "training" | "battle" | "victory";
+export type BattleMove = "stomp" | "tail_whip" | "brace";
 
 export type FaceEmotion = "happy" | "neutral" | "excited" | "tired" | "confused";
 
 export type SpeechIntent =
   | "greeting"
   | "calling_dino"
-  | "saying_tucker"
+  | "saying_name"
   | "excited"
   | "random"
   | "unknown";
@@ -78,6 +80,19 @@ type GameState = {
     xp: number; // 0..inf
     growthStage: number; // 1..n
   };
+  adventure: {
+    chapter: number;
+    mode: AdventureMode;
+    quest: string;
+    trainingStars: number;
+    power: number;
+    agility: number;
+    heart: number;
+    playerHp: number;
+    rivalHp: number;
+    battleMessage: string;
+    turn: number;
+  };
   dinoDirective: DinoDirective;
   radialMenuOpen: boolean;
 
@@ -132,6 +147,11 @@ type GameState = {
   closeRadialMenu: () => void;
 
   applyDinoAction: (action: DinoAction) => void;
+  beginTraining: () => void;
+  trainStat: (stat: "power" | "agility" | "heart") => void;
+  beginBattle: () => void;
+  useBattleMove: (move: BattleMove) => void;
+  returnToRanch: () => void;
 
   setCamp: (active: boolean, pos: Vec3 | null) => void;
 
@@ -165,7 +185,7 @@ const HOME_DINO_SPAWN: Vec3 = { x: 1.5, y: 0, z: 0.2 };
 
 export const useGameStore = create<GameState>((set, get) => ({
   activeSaveSlot: null,
-  childName: "Tucker",
+  childName: "Ranger",
   scene: "egg",
 
   eggSelectedId: null,
@@ -186,6 +206,19 @@ export const useGameStore = create<GameState>((set, get) => ({
     happiness: 0.9,
     xp: 0,
     growthStage: 1,
+  },
+  adventure: {
+    chapter: 1,
+    mode: "explore",
+    quest: "Meet Pip at the training ring",
+    trainingStars: 0,
+    power: 1,
+    agility: 1,
+    heart: 1,
+    playerHp: 12,
+    rivalHp: 12,
+    battleMessage: "A friendly challenger is waiting beyond the ranch!",
+    turn: 0,
   },
   dinoDirective: defaultDirective,
   radialMenuOpen: false,
@@ -307,6 +340,73 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
   },
 
+  beginTraining: () => set((s) => ({
+    adventure: { ...s.adventure, mode: "training", quest: "Earn 3 training stars" },
+    playerTarget: { x: -8, y: 0, z: 8 },
+    moveSequenceId: s.moveSequenceId + 1,
+  })),
+
+  trainStat: (stat) => set((s) => {
+    const stars = Math.min(3, s.adventure.trainingStars + 1);
+    const ready = stars >= 3;
+    return {
+      dinoStats: { ...s.dinoStats, xp: s.dinoStats.xp + 4, happiness: clamp01(s.dinoStats.happiness + .04) },
+      adventure: {
+        ...s.adventure,
+        [stat]: s.adventure[stat] + 1,
+        trainingStars: stars,
+        chapter: ready ? Math.max(2, s.adventure.chapter) : s.adventure.chapter,
+        mode: ready ? "explore" : "training",
+        quest: ready ? "Challenge the Mossback at the meadow gate" : `Earn ${3 - stars} more training ${3 - stars === 1 ? "star" : "stars"}`,
+        battleMessage: ready ? "Pip says your bond is strong enough. The meadow gate is open!" : `Great ${stat} practice!`,
+      },
+    };
+  }),
+
+  beginBattle: () => set((s) => ({
+    adventure: {
+      ...s.adventure,
+      mode: "battle",
+      quest: "Win your first friendly ranch battle",
+      playerHp: 12 + s.adventure.heart,
+      rivalHp: 12,
+      turn: 0,
+      battleMessage: "Mossback wants to test your teamwork! Choose a move.",
+    },
+    playerTarget: null,
+  })),
+
+  useBattleMove: (move) => set((s) => {
+    if (s.adventure.mode !== "battle") return s;
+    const a = s.adventure;
+    const damage = move === "stomp" ? 2 + Math.floor(a.power / 2) : move === "tail_whip" ? 1 + Math.floor(a.agility / 2) : 0;
+    const rivalHp = Math.max(0, a.rivalHp - damage);
+    const reply = rivalHp <= 0 ? 0 : Math.max(0, 3 - (move === "brace" ? 2 : 0) - Math.floor(a.heart / 4));
+    const playerHp = Math.max(0, a.playerHp - reply);
+    const won = rivalHp <= 0;
+    const lost = playerHp <= 0;
+    const name = move === "stomp" ? "Comet Stomp" : move === "tail_whip" ? "Leaf Whirl" : "Brave Brace";
+    return {
+      dinoStats: won ? { ...s.dinoStats, xp: s.dinoStats.xp + 15, happiness: 1 } : s.dinoStats,
+      adventure: {
+        ...a,
+        mode: won ? "victory" : lost ? "training" : "battle",
+        chapter: won ? 3 : a.chapter,
+        playerHp: lost ? 12 + a.heart : playerHp,
+        rivalHp: lost ? 12 : rivalHp,
+        turn: a.turn + 1,
+        quest: won ? "Follow the glowing tracks into Fernwood" : lost ? "Train and try again" : a.quest,
+        battleMessage: won ? "Mossback bows! You earned the Meadow Crest." : lost ? "Mossback helps you up. Train once more and try again!" : `${name}! Mossback answers with a gentle head bump.`,
+      },
+    };
+  }),
+
+  returnToRanch: () => set((s) => ({
+    adventure: { ...s.adventure, mode: "explore" },
+    playerTarget: { ...HOME_SPAWN },
+    moveSequenceId: s.moveSequenceId + 1,
+  })),
+
   setCamp: (active, pos) => set({ campActive: active, campPos: pos }),
 
   setDayCycle: (phase, daylight) =>
@@ -344,13 +444,14 @@ export const useGameStore = create<GameState>((set, get) => ({
     dinoPos: { ...HOME_DINO_SPAWN },
     dinoScale: 1,
     dinoStats: { hunger: .8, cleanliness: .8, happiness: .9, xp: 0, growthStage: 1 },
+    adventure: { chapter: 1, mode: "explore", quest: "Meet Pip at the training ring", trainingStars: 0, power: 1, agility: 1, heart: 1, playerHp: 12, rivalHp: 12, battleMessage: "A friendly challenger is waiting beyond the ranch!", turn: 0 },
     campActive: false,
     campPos: null,
     recentEvents: [],
   }),
   loadGame: (slot) => {
     try {
-      const raw = localStorage.getItem(`tucker_dino_save_${slot}`);
+      const raw = localStorage.getItem(`rawrcade_save_${slot}`) ?? localStorage.getItem(`tucker_dino_save_${slot}`);
       if (!raw) return false;
       const saved = JSON.parse(raw) as Partial<GameState>;
       set((s) => ({
@@ -363,6 +464,7 @@ export const useGameStore = create<GameState>((set, get) => ({
         playerTarget: null,
         dinoPos: { ...HOME_DINO_SPAWN },
         dinoStats: saved.dinoStats ?? s.dinoStats,
+        adventure: saved.adventure ?? s.adventure,
         dinoScale: saved.dinoScale ?? 1,
         campActive: saved.campActive ?? false,
         campPos: saved.campPos ?? null,
@@ -382,12 +484,13 @@ export function persistGame() {
     playerRotation: s.playerRotation,
     dinoPos: s.dinoPos,
     dinoStats: s.dinoStats,
+    adventure: s.adventure,
     dinoScale: s.dinoScale,
     campActive: s.campActive,
     campPos: s.campPos,
   };
   try {
-    localStorage.setItem(`tucker_dino_save_${s.activeSaveSlot}`, JSON.stringify(save));
+    localStorage.setItem(`rawrcade_save_${s.activeSaveSlot}`, JSON.stringify(save));
   } catch {
     // ignore
   }
