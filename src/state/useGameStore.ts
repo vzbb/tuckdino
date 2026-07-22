@@ -3,7 +3,7 @@ import { create } from "zustand";
 export type Vec3 = { x: number; y: number; z: number };
 
 export type SceneName = "egg" | "hatching" | "world";
-export type AdventureMode = "explore" | "training" | "battle" | "victory";
+export type AdventureMode = "explore" | "training" | "battle" | "resolving" | "victory";
 export type BattleMove = "stomp" | "tail_whip" | "brace";
 
 export type FaceEmotion = "happy" | "neutral" | "excited" | "tired" | "confused";
@@ -151,6 +151,7 @@ type GameState = {
   trainStat: (stat: "power" | "agility" | "heart") => void;
   beginBattle: () => void;
   useBattleMove: (move: BattleMove) => void;
+  finishBattleResolution: () => void;
   returnToRanch: () => void;
 
   setCamp: (active: boolean, pos: Vec3 | null) => void;
@@ -390,7 +391,7 @@ export const useGameStore = create<GameState>((set, get) => ({
       dinoStats: won ? { ...s.dinoStats, xp: s.dinoStats.xp + 15, happiness: 1 } : s.dinoStats,
       adventure: {
         ...a,
-        mode: won ? "victory" : lost ? "training" : "battle",
+        mode: won ? "victory" : lost ? "resolving" : "battle",
         chapter: won ? 3 : a.chapter,
         playerHp: lost ? 12 + a.heart : playerHp,
         rivalHp: lost ? 12 : rivalHp,
@@ -398,6 +399,20 @@ export const useGameStore = create<GameState>((set, get) => ({
         quest: won ? "Follow the glowing tracks into Fernwood" : lost ? "Train and try again" : a.quest,
         battleMessage: won ? "Mossback bows! You earned the Meadow Crest." : lost ? "Mossback helps you up. Train once more and try again!" : `${name}! Mossback answers with a gentle head bump.`,
       },
+    };
+  }),
+
+  finishBattleResolution: () => set((s) => {
+    if (s.adventure.mode !== "resolving") return s;
+    return {
+      adventure: {
+        ...s.adventure,
+        mode: "training",
+        playerHp: 12 + s.adventure.heart,
+        rivalHp: 12,
+      },
+      playerTarget: { x: -8, y: 0, z: 8 },
+      moveSequenceId: s.moveSequenceId + 1,
     };
   }),
 

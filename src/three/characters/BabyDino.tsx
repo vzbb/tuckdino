@@ -3,13 +3,15 @@
 import { Suspense, useEffect, useRef, useState, useMemo } from "react";
 import * as THREE from "three";
 import { useFrame, useThree } from "@react-three/fiber";
-import { useAnimations, useGLTF } from "@react-three/drei";
 import { AssetBoundary } from "@/src/three/components/AssetBoundary";
 import { useGameStore, type DinoAnimationKey } from "@/src/state/useGameStore";
 import { clamp, dampAngle } from "@/src/systems/utils/math";
 import { playerRenderPosition } from "@/src/three/characters/PlayerMarker";
-
-const BABY_DINO_GLB = "/assets/quaternius/Parasaurolophus.glb";
+import {
+  AnimatedDinosaur,
+  getSpeciesForEgg,
+  type DinoClip,
+} from "@/src/three/characters/DinosaurModel";
 
 type Props = {
   position?: [number, number, number];
@@ -47,28 +49,13 @@ function FallbackDinoBody() {
   );
 }
 
-function pickClipName(available: string[], key: DinoAnimationKey): string | null {
-  const low = available.map((n) => n.toLowerCase());
-  const find = (patterns: string[]) => {
-    for (const p of patterns) {
-      const idx = low.findIndex((n) => n.includes(p));
-      if (idx >= 0) return available[idx];
-    }
-    return null;
-  };
-
+function toDinoClip(key: DinoAnimationKey): DinoClip {
   switch (key) {
-    case "idle": return find(["idle", "rest", "stand"]) ?? null;
-    case "walk": return find(["walk"]) ?? null;
-    case "run": return find(["run", "sprint"]) ?? find(["walk"]) ?? null;
+    case "walk": return "walk";
+    case "run": return "run";
     case "hop":
-    case "happy_jump": return find(["jump", "hop"]) ?? null;
-    case "sit": return find(["sit"]) ?? null;
-    case "nuzzle": return find(["nuzzle", "kiss", "sniff"]) ?? null;
-    case "look_at_camera": return find(["idle"]) ?? null;
-    case "clap": return find(["clap"]) ?? null;
-    case "wave": return find(["wave"]) ?? null;
-    default: return null;
+    case "happy_jump": return "jump";
+    default: return "idle";
   }
 }
 
@@ -124,44 +111,6 @@ function Heart({ index }: { index: number }) {
   );
 }
 
-function QuaterniusDinoModel({ activeAnimation }: { activeAnimation: DinoAnimationKey }) {
-  const gltf = useGLTF(BABY_DINO_GLB);
-  const group = useRef<THREE.Group>(null);
-  const { actions, names } = useAnimations(gltf.animations, group);
-  const dayPhase = useGameStore((s) => s.dayPhase);
-
-  useEffect(() => {
-    // Night glow logic
-    gltf.scene.traverse((obj) => {
-      if ((obj as THREE.Mesh).isMesh) {
-        const mesh = obj as THREE.Mesh;
-        if (mesh.material instanceof THREE.MeshStandardMaterial) {
-          if (dayPhase === "night") {
-            mesh.material.emissive.set("#44ffcc");
-            mesh.material.emissiveIntensity = 0.2 + Math.sin(Date.now() / 1000) * 0.1;
-          } else {
-            mesh.material.emissive.set("#000000");
-            mesh.material.emissiveIntensity = 0;
-          }
-        }
-      }
-    });
-  }, [gltf, dayPhase]);
-
-  useEffect(() => {
-    const clipName = pickClipName(names, activeAnimation);
-    if (!clipName) return;
-    const action = actions[clipName];
-    if (!action) return;
-
-    Object.values(actions).forEach((a) => a?.fadeOut(0.12));
-    action.reset().fadeIn(0.12).play();
-    return () => { action.fadeOut(0.12); };
-  }, [actions, names, activeAnimation]);
-
-  return <primitive ref={group} object={gltf.scene} rotation-y={0} />;
-}
-
 export function BabyDino({
   position,
   scale,
@@ -178,6 +127,8 @@ export function BabyDino({
   const moveSequenceId = useGameStore((s) => s.moveSequenceId);
   const openMenu = useGameStore((s) => s.openRadialMenu);
   const setDinoDirective = useGameStore((s) => s.setDinoDirective);
+  const eggSelectedId = useGameStore((s) => s.eggSelectedId);
+  const dayPhase = useGameStore((s) => s.dayPhase);
 
   const group = useRef<THREE.Group>(null);
   const posRef = useRef<THREE.Vector3>(new THREE.Vector3(storeDinoPos.x, storeDinoPos.y, storeDinoPos.z));
@@ -219,6 +170,7 @@ export function BabyDino({
 
     if (controlled && position) {
       desired.set(position[0], position[1], position[2]);
+      cur.copy(desired);
     } else if (directive.moveTarget) {
       desired.set(directive.moveTarget.x, 0, directive.moveTarget.z);
     } else {
@@ -264,7 +216,7 @@ export function BabyDino({
     }
 
     const distToDesired = desired.distanceTo(cur);
-    const speed = controlled ? 0 : (playerTarget || directive.moveTarget) ? 3.5 : 1.2;
+    const speed = (playerTarget || directive.moveTarget) ? 3.5 : 1.2;
     const step = Math.min(distToDesired, speed * delta);
     const moveDelta = desired.clone().sub(cur);
     if (distToDesired > 0.001) {
@@ -330,14 +282,22 @@ export function BabyDino({
     }
   });
 
-  const finalScale = (scale ?? 1) * (controlled ? 1 : dinoScale) * 0.25;
+  const finalScale = (scale ?? 1) * (controlled ? 1 : dinoScale);
+  const species = getSpeciesForEgg(eggSelectedId);
+  const modelAnimation = toDinoClip(animKey);
 
   return (
     <group ref={group} scale={finalScale} onPointerDown={(e) => { if (interactive) { e.stopPropagation(); openMenu(); } }}>
       <InteractionEffects />
       <AssetBoundary fallback={<FallbackDinoBody />}>
         <Suspense fallback={<FallbackDinoBody />}>
-          <QuaterniusDinoModel activeAnimation={animKey} />
+          <AnimatedDinosaur
+            species={species}
+            animation={modelAnimation}
+            animationKey={animKey}
+            glowColor={dayPhase === "night" ? "#55ffd5" : undefined}
+            glowIntensity={dayPhase === "night" ? 0.12 : 0}
+          />
         </Suspense>
       </AssetBoundary>
     </group>

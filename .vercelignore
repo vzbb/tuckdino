@@ -1,0 +1,12 @@
+.next
+output
+*.log
+/world-scene.png
+/world-scene-2.png
+/world-move.png
+/manual-page.png
+/egg-scene.png
+tsconfig.tsbuildinfo
+pnpm-lock.yaml
+pnpm-workspace.yaml
+conductor

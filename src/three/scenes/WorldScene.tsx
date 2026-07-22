@@ -1,6 +1,6 @@
 "use client";
 
-import { Suspense, useMemo, useRef, useEffect } from "react";
+import { useMemo, useRef, useEffect } from "react";
 import { useFrame, useThree } from "@react-three/fiber";
 import { Stars, useTexture } from "@react-three/drei";
 import { BackSide, Color, SRGBColorSpace, Vector3 } from "three";
@@ -12,21 +12,57 @@ import { playerRenderPosition } from "@/src/three/characters/PlayerMarker";
 import { WorldProps } from "@/src/three/world/WorldProps";
 import { Camp } from "@/src/three/world/Camp";
 import { Collectibles } from "@/src/three/world/Collectibles";
+import { DinosaurArena } from "@/src/three/world/DinosaurArena";
+import { AssetBoundary } from "@/src/three/components/AssetBoundary";
 
-function FollowCamera() {
+function CameraRig() {
   const camera = useThree((s) => s.camera);
-
   const target = useMemo(() => new Vector3(), []);
+  const desiredPosition = useMemo(() => new Vector3(), []);
+  const cinematicTarget = useMemo(() => new Vector3(0, 1.55, -25), []);
+  const smoothedTarget = useRef(new Vector3(0, 1.55, -25));
+  const lastTurn = useRef(-1);
+  const shakeUntil = useRef(0);
 
-  useFrame(() => {
-    const { playerRotation, playerPitch, playerZoom } = useGameStore.getState();
+  useFrame((state, delta) => {
+    const { playerRotation, playerPitch, playerZoom, adventure } = useGameStore.getState();
+    const cinematic = adventure.mode === "battle" || adventure.mode === "resolving" || adventure.mode === "victory";
+
+    if (cinematic) {
+      if (lastTurn.current !== adventure.turn) {
+        lastTurn.current = adventure.turn;
+        shakeUntil.current = state.clock.elapsedTime + 0.65;
+      }
+
+      const victory = adventure.mode === "victory";
+      const orbit = state.clock.elapsedTime * (victory ? 0.22 : 0.1);
+      const shake = state.clock.elapsedTime < shakeUntil.current
+        ? Math.sin(state.clock.elapsedTime * 48) * 0.1
+        : 0;
+      desiredPosition.set(
+        Math.sin(orbit) * (victory ? 6.2 : 1.25) + shake,
+        victory ? 4.8 : 3.65 + shake * 0.35,
+        victory ? -15.5 + Math.cos(orbit) * 2.2 : -14.2
+      );
+      camera.position.lerp(desiredPosition, 1 - Math.exp(-delta * 3.1));
+      smoothedTarget.current.lerp(cinematicTarget, 1 - Math.exp(-delta * 4.5));
+      camera.lookAt(smoothedTarget.current);
+      if ("fov" in camera) {
+        const perspective = camera as typeof camera & { fov: number; updateProjectionMatrix: () => void };
+        perspective.fov += ((victory ? 48 : 54) - perspective.fov) * (1 - Math.exp(-delta * 4));
+        perspective.updateProjectionMatrix();
+      }
+      return;
+    }
+
     // First person camera: at player position, looking in rotation direction
     camera.position.set(playerRenderPosition.x, 1.4, playerRenderPosition.z);
     
     // Default FOV is usually 75. Scale it by zoom factor.
     if ("fov" in camera) {
-      (camera as any).fov = 75 * playerZoom;
-      (camera as any).updateProjectionMatrix();
+      const perspective = camera as typeof camera & { fov: number; updateProjectionMatrix: () => void };
+      perspective.fov = 75 * playerZoom;
+      perspective.updateProjectionMatrix();
     }
 
     // Look target including pitch (vertical) and yaw (horizontal)
@@ -40,7 +76,8 @@ function FollowCamera() {
       1.4 + sinPitch,
       playerRenderPosition.z + cosYaw * cosPitch
     );
-    camera.lookAt(target);
+    smoothedTarget.current.copy(target);
+    camera.lookAt(smoothedTarget.current);
   });
 
   return null;
@@ -64,6 +101,8 @@ function Controls() {
     const canvas = gl.domElement;
 
     const onPointerDown = (e: PointerEvent) => {
+      const mode = useGameStore.getState().adventure.mode;
+      if (mode === "battle" || mode === "resolving" || mode === "victory") return;
       isDragging.current = true;
       lastX.current = e.clientX;
       lastY.current = e.clientY;
@@ -98,6 +137,8 @@ function Controls() {
     };
 
     const onWheel = (e: WheelEvent) => {
+      const mode = useGameStore.getState().adventure.mode;
+      if (mode === "battle" || mode === "resolving" || mode === "victory") return;
       // Zoom in/out with mouse wheel
       const delta = e.deltaY * 0.001;
       const newZoom = clamp(useGameStore.getState().playerZoom + delta, 0.5, 2.0);
@@ -105,6 +146,8 @@ function Controls() {
     };
 
     const onTouchMove = (e: TouchEvent) => {
+      const mode = useGameStore.getState().adventure.mode;
+      if (mode === "battle" || mode === "resolving" || mode === "victory") return;
       if (e.touches.length === 2) {
         // Pinch-to-zoom logic
         const t1 = e.touches[0];
@@ -190,6 +233,7 @@ function Lighting() {
 
 function WorldGround() {
   const setMoveTarget = useGameStore((s) => s.setMoveTarget);
+  const adventureMode = useGameStore((s) => s.adventure.mode);
   const isDragging = useRef(false);
   const startPos = useRef({ x: 0, y: 0 });
 
@@ -210,7 +254,7 @@ function WorldGround() {
       }}
       onPointerUp={(e) => {
         // Only move if we weren't dragging the camera
-        if (!isDragging.current) {
+        if (!isDragging.current && adventureMode !== "battle" && adventureMode !== "resolving" && adventureMode !== "victory") {
           e.stopPropagation();
           setMoveTarget({ x: e.point.x, y: 0, z: e.point.z });
         }
@@ -237,6 +281,7 @@ export function WorldScene() {
   const phase = useGameStore((s) => s.dayPhase);
   const dayLight = useGameStore((s) => s.dayLight);
   const scene = useThree((s) => s.scene);
+  const adventureMode = useGameStore((s) => s.adventure.mode);
   const isNight = phase === "night";
 
   const fogColor = isNight ? "#314c78" : phase === "morning" ? "#ffecdb" : phase === "evening" ? "#ffae80" : "#d0f0ff";
@@ -262,13 +307,22 @@ export function WorldScene() {
       <WorldGround />
 
       <WorldProps />
+      {(adventureMode === "battle" || adventureMode === "resolving" || adventureMode === "victory") && (
+        <AssetBoundary fallback={null}>
+          <DinosaurArena />
+        </AssetBoundary>
+      )}
       <Collectibles />
       <Camp />
 
-      <PlayerMarker />
-      <BabyDino />
+      {adventureMode !== "battle" && adventureMode !== "resolving" && adventureMode !== "victory" && (
+        <>
+          <PlayerMarker />
+          <BabyDino />
+        </>
+      )}
 
-      <FollowCamera />
+      <CameraRig />
     </group>
   );
 }

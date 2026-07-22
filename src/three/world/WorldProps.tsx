@@ -18,17 +18,40 @@ type ScatterPoint = {
   rotation: number;
 };
 
-function makeScatter(count: number, radius: number, minRadius = 0): ScatterPoint[] {
-  return Array.from({ length: count }, () => {
-    const angle = Math.random() * Math.PI * 2;
-    const distance = minRadius + Math.random() * (radius - minRadius);
-    return {
-      x: Math.cos(angle) * distance,
-      z: Math.sin(angle) * distance,
-      scale: 0.8 + Math.random() * 0.6,
-      rotation: Math.random() * Math.PI * 2,
-    };
-  });
+type Clearing = { x: number; z: number; radius: number };
+
+function makeScatter(
+  count: number,
+  radius: number,
+  minRadius = 0,
+  seed = 1337,
+  clearings: Clearing[] = []
+): ScatterPoint[] {
+  let state = seed >>> 0;
+  const random = () => {
+    state = (state * 1664525 + 1013904223) >>> 0;
+    return state / 4294967296;
+  };
+  const points: ScatterPoint[] = [];
+  let attempts = 0;
+
+  while (points.length < count && attempts < count * 30) {
+    attempts += 1;
+    const angle = random() * Math.PI * 2;
+    const distance = minRadius + random() * (radius - minRadius);
+    const x = Math.cos(angle) * distance;
+    const z = Math.sin(angle) * distance;
+    const blocked = clearings.some((clearing) => Math.hypot(x - clearing.x, z - clearing.z) < clearing.radius);
+    if (blocked) continue;
+    points.push({
+      x,
+      z,
+      scale: 0.8 + random() * 0.6,
+      rotation: random() * Math.PI * 2,
+    });
+  }
+
+  return points;
 }
 
 function FallbackTent() {
@@ -300,13 +323,13 @@ function HomeRanch() {
   );
 }
 
-function TrainingAndBattleGround() {
+function TrainingGround() {
   const mode = useGameStore((s) => s.adventure.mode);
   const pulse = useRef<THREE.Group>(null);
   useFrame((state) => {
     if (pulse.current) pulse.current.rotation.y = Math.sin(state.clock.elapsedTime * .8) * .08;
   });
-  return <group>
+  return (
     <group position={[-8,0,8]}>
       <mesh position={[0,.035,0]} rotation-x={-Math.PI/2} receiveShadow><ringGeometry args={[2.5,3.05,40]} /><meshStandardMaterial color="#e7c268" roughness={1} /></mesh>
       {Array.from({length:8}).map((_,i)=><mesh key={i} position={[Math.cos(i*Math.PI/4)*2.8,.12,Math.sin(i*Math.PI/4)*2.8]} rotation={[0,i*Math.PI/4,Math.PI/2]} castShadow><cylinderGeometry args={[.13,.17,1.1,8]} /><meshStandardMaterial color="#9a6137" /></mesh>)}
@@ -316,19 +339,21 @@ function TrainingAndBattleGround() {
       </group>
       <pointLight position={[0,1,0]} color="#ffd276" intensity={mode==="training"?1.5:.35} distance={8}/>
     </group>
-    <group position={[0,0,-25]}>
-      <mesh position={[0,.025,0]} rotation-x={-Math.PI/2}><circleGeometry args={[6,48]} /><meshStandardMaterial color={mode==="battle"||mode==="victory"?"#91b45c":"#6fa556"} /></mesh>
-      {[-5.8,5.8].map((x)=><group key={x} position={[x,0,0]}><mesh position={[0,1.2,0]}><cylinderGeometry args={[.18,.25,2.4,8]}/><meshStandardMaterial color="#765035"/></mesh><mesh position={[0,2.15,0]}><sphereGeometry args={[.5,12,10]}/><meshStandardMaterial color="#ffd35e" emissive="#ff9d39" emissiveIntensity={mode==="battle"?1:.2}/></mesh></group>)}
-    </group>
-  </group>;
+  );
 }
 
 export function WorldProps() {
-  const treePoints = useMemo(() => makeScatter(48, 42, 15), []);
-  const hillPoints = useMemo(() => makeScatter(8, 40, 24), []);
-  const flowerPoints = useMemo(() => makeScatter(120, 11), []);
-  const pebblePoints = useMemo(() => makeScatter(24, 8, 2), []);
-  const lanternPoints = useMemo(() => makeScatter(9, 7, 3), []);
+  const treePoints = useMemo(
+    () => makeScatter(42, 42, 15, 9125, [{ x: 0, z: -25, radius: 12 }]),
+    []
+  );
+  const hillPoints = useMemo(
+    () => makeScatter(8, 40, 24, 4812, [{ x: 0, z: -25, radius: 13 }]),
+    []
+  );
+  const flowerPoints = useMemo(() => makeScatter(120, 11, 0, 2027), []);
+  const pebblePoints = useMemo(() => makeScatter(24, 8, 2, 3321), []);
+  const lanternPoints = useMemo(() => makeScatter(9, 7, 3, 7741), []);
 
   return (
     <group>
@@ -336,7 +361,7 @@ export function WorldProps() {
       <PlayZones />
       <MeadowStructure />
       <HomeRanch />
-      <TrainingAndBattleGround />
+      <TrainingGround />
 
       <group position={[-5.2, 0, 9.8]} rotation-y={0.45} scale={0.32}>
         <AssetBoundary fallback={<FallbackTent />}>

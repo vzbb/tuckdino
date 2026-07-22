@@ -1,7 +1,7 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useGameStore } from "@/src/state/useGameStore";
+import { useEffect, useRef, useState } from "react";
+import { useGameStore, type BattleMove } from "@/src/state/useGameStore";
 import { RadialMenu } from "@/src/ui/RadialMenu";
 
 export function HUD() {
@@ -15,7 +15,11 @@ export function HUD() {
   const trainStat = useGameStore((s) => s.trainStat);
   const beginBattle = useGameStore((s) => s.beginBattle);
   const useBattleMove = useGameStore((s) => s.useBattleMove);
+  const finishBattleResolution = useGameStore((s) => s.finishBattleResolution);
   const returnToRanch = useGameStore((s) => s.returnToRanch);
+  const [battleLocked, setBattleLocked] = useState(false);
+  const [victoryReady, setVictoryReady] = useState(false);
+  const battleTimer = useRef<number | null>(null);
 
   useEffect(() => {
     setShowHint(true);
@@ -23,9 +27,33 @@ export function HUD() {
     return () => window.clearTimeout(timer);
   }, [scene]);
 
+  useEffect(() => () => {
+    if (battleTimer.current !== null) window.clearTimeout(battleTimer.current);
+  }, []);
+
+  useEffect(() => {
+    setVictoryReady(false);
+    if (adventure.mode === "victory") {
+      const timer = window.setTimeout(() => setVictoryReady(true), 1250);
+      return () => window.clearTimeout(timer);
+    }
+    if (adventure.mode === "resolving") {
+      const timer = window.setTimeout(finishBattleResolution, 1650);
+      return () => window.clearTimeout(timer);
+    }
+  }, [adventure.mode, finishBattleResolution]);
+
+  const playBattleMove = (move: BattleMove) => {
+    if (battleLocked) return;
+    setBattleLocked(true);
+    useBattleMove(move);
+    if (battleTimer.current !== null) window.clearTimeout(battleTimer.current);
+    battleTimer.current = window.setTimeout(() => setBattleLocked(false), 1650);
+  };
+
   return (
     <>
-      {scene === "world" && (
+      {scene === "world" && adventure.mode !== "battle" && adventure.mode !== "resolving" && adventure.mode !== "victory" && (
         <div className="adventure-hud">
           <div className="chapter-pill">CHAPTER {adventure.chapter} · THE MEADOW CREST</div>
           <div className="quest-card">
@@ -55,18 +83,27 @@ export function HUD() {
         </div>
       )}
 
-      {scene === "world" && (adventure.mode === "battle" || adventure.mode === "victory") && (
+      {scene === "world" && (adventure.mode === "battle" || adventure.mode === "resolving" || adventure.mode === "victory") && (
         <div className="battle-overlay">
-          <div className="battle-banner"><small>FRIENDLY RANCH BATTLE</small><strong>{adventure.battleMessage}</strong></div>
+          <div className="battle-banner">
+            <small><i className="battle-live-dot" /> MEADOW CREST SHOWDOWN</small>
+            <strong>{adventure.battleMessage}</strong>
+          </div>
           <div className="battle-health">
             <div><b>Your Dino</b><span><i style={{ width: `${adventure.playerHp / (12 + adventure.heart) * 100}%` }} /></span><small>{adventure.playerHp} HP</small></div>
             <div><b>Mossback</b><span><i className="rival-hp" style={{ width: `${adventure.rivalHp / 12 * 100}%` }} /></span><small>{adventure.rivalHp} HP</small></div>
           </div>
           {adventure.mode === "battle" ? <div className="battle-moves">
-            <button onClick={() => useBattleMove("stomp")}><b>☄️ Comet Stomp</b><small>Strong & steady</small></button>
-            <button onClick={() => useBattleMove("tail_whip")}><b>🍃 Leaf Whirl</b><small>Quick attack</small></button>
-            <button onClick={() => useBattleMove("brace")}><b>🛡️ Brave Brace</b><small>Block damage</small></button>
-          </div> : <button className="victory-button" onClick={returnToRanch}>Claim the Meadow Crest ✨</button>}
+            <button disabled={battleLocked} onClick={() => playBattleMove("stomp")}><b>☄️ Comet Stomp</b><small>Ground-shaking power</small></button>
+            <button disabled={battleLocked} onClick={() => playBattleMove("tail_whip")}><b>🍃 Leaf Whirl</b><small>Fast forest strike</small></button>
+            <button disabled={battleLocked} onClick={() => playBattleMove("brace")}><b>🛡️ Brave Brace</b><small>Hold strong together</small></button>
+          </div> : adventure.mode === "victory" ? (
+            <button className="victory-button" disabled={!victoryReady} onClick={returnToRanch}>
+              {victoryReady ? "Claim the Meadow Crest ✨" : "The Meadow Crest is awakening…"}
+            </button>
+          ) : (
+            <div className="battle-resolving">Mossback helps your dino back up…</div>
+          )}
         </div>
       )}
       {scene === "world" && lastEvent?.type === "collectible_found" && (

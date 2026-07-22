@@ -1,12 +1,29 @@
-Drop Quaternius assets here (NOT included in this repo).
+Quaternius browser assets included in this directory
+====================================================
 
-Expected (optional) paths (GLB/GLTF):
-- /public/assets/quaternius/baby_dino.glb
-- /public/assets/quaternius/village_hut.glb
-- /public/assets/quaternius/tent.glb
+Animated dinosaurs:
+- Apatosaurus.glb
+- Parasaurolophus.glb
+- Stegosaurus.glb
+- Trex.glb
+- Triceratops.glb
+- Velociraptor.glb
 
-If you don't add them, the game still runs using simple built-in fallback meshes.
+Ranch and arena props:
+- Backpack.glb
+- Bonfire.glb
+- Compass_Open.glb
+- Raft.glb
+- Tent.glb
+- WoodenTorch_Fire.glb
+- WoodLog.glb
 
-Notes:
-- Quaternius packs are usually FBX/BLEND. If needed, open in Blender and export to GLB.
-- Keep animations inside baby_dino.glb if available (Idle/Walk/Run/Jump etc).
+The source FBX files came from the Quaternius Dinosaur Animated Pack
+(December 2018) and Survival Pack (September 2020). The added assets were
+converted to binary glTF for the web while preserving dinosaur animation clips.
+
+License
+-------
+LowPoly Models by @Quaternius
+CC0 1.0 Universal (CC0 1.0), Public Domain Dedication
+https://creativecommons.org/publicdomain/zero/1.0/

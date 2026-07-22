@@ -5,7 +5,7 @@ import { useGLTF } from "@react-three/drei";
 import { AssetBoundary } from "@/src/three/components/AssetBoundary";
 import { useGameStore } from "@/src/state/useGameStore";
 
-const TENT_GLB = "/assets/quaternius/tent.glb";
+const TENT_GLB = "/assets/quaternius/Tent.glb";
 
 function FallbackTent() {
   return (
