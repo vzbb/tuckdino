@@ -51,7 +51,12 @@ export type GameEvent =
   | { t: number; type: "tap_move"; target: Vec3 }
   | { t: number; type: "dino_action"; action: DinoAction }
   | { t: number; type: "collectible_found"; id: string }
-  | { t: number; type: "dino_investigate"; targetId: string };
+  | { t: number; type: "dino_investigate"; targetId: string }
+  | { t: number; type: "arena_reward"; reward: "meadow_crest"; growthStage: number }
+  | { t: number; type: "camp_crest_celebration" }
+  | { t: number; type: "arena_started" }
+  | { t: number; type: "training_completed"; stat: "power" | "agility" | "heart" }
+  | { t: number; type: "battle_move"; move: BattleMove };
 
 type GameState = {
   activeSaveSlot: number | null;
@@ -92,6 +97,11 @@ type GameState = {
     rivalHp: number;
     battleMessage: string;
     turn: number;
+  };
+  progression: {
+    arenaWins: number;
+    meadowCrestEarned: boolean;
+    campCrestCelebrations: number;
   };
   dinoDirective: DinoDirective;
   radialMenuOpen: boolean;
@@ -153,6 +163,7 @@ type GameState = {
   useBattleMove: (move: BattleMove) => void;
   finishBattleResolution: () => void;
   returnToRanch: () => void;
+  celebrateCrestAtCamp: () => void;
 
   setCamp: (active: boolean, pos: Vec3 | null) => void;
 
@@ -171,6 +182,7 @@ type GameState = {
   hydrateFromStorage: () => void;
   startNewGame: (slot: number) => void;
   loadGame: (slot: number) => boolean;
+  deleteGame: (slot: number) => void;
 };
 
 const clamp01 = (n: number) => Math.max(0, Math.min(1, n));
@@ -220,6 +232,11 @@ export const useGameStore = create<GameState>((set, get) => ({
     rivalHp: 12,
     battleMessage: "A friendly challenger is waiting beyond the ranch!",
     turn: 0,
+  },
+  progression: {
+    arenaWins: 0,
+    meadowCrestEarned: false,
+    campCrestCelebrations: 0,
   },
   dinoDirective: defaultDirective,
   radialMenuOpen: false,
@@ -350,6 +367,7 @@ export const useGameStore = create<GameState>((set, get) => ({
   trainStat: (stat) => set((s) => {
     const stars = Math.min(3, s.adventure.trainingStars + 1);
     const ready = stars >= 3;
+    queueMicrotask(() => get().pushEvent({ t: Date.now(), type: "training_completed", stat }));
     return {
       dinoStats: { ...s.dinoStats, xp: s.dinoStats.xp + 4, happiness: clamp01(s.dinoStats.happiness + .04) },
       adventure: {
@@ -364,21 +382,25 @@ export const useGameStore = create<GameState>((set, get) => ({
     };
   }),
 
-  beginBattle: () => set((s) => ({
-    adventure: {
-      ...s.adventure,
-      mode: "battle",
-      quest: "Win your first friendly ranch battle",
-      playerHp: 12 + s.adventure.heart,
-      rivalHp: 12,
-      turn: 0,
-      battleMessage: "Mossback wants to test your teamwork! Choose a move.",
-    },
-    playerTarget: null,
-  })),
+  beginBattle: () => {
+    set((s) => ({
+      adventure: {
+        ...s.adventure,
+        mode: "battle",
+        quest: "Win your first friendly ranch battle",
+        playerHp: 12 + s.adventure.heart,
+        rivalHp: 12,
+        turn: 0,
+        battleMessage: "Mossback wants to test your teamwork! Choose a move.",
+      },
+      playerTarget: null,
+    }));
+    get().pushEvent({ t: Date.now(), type: "arena_started" });
+  },
 
   useBattleMove: (move) => set((s) => {
     if (s.adventure.mode !== "battle") return s;
+    queueMicrotask(() => get().pushEvent({ t: Date.now(), type: "battle_move", move }));
     const a = s.adventure;
     const damage = move === "stomp" ? 2 + Math.floor(a.power / 2) : move === "tail_whip" ? 1 + Math.floor(a.agility / 2) : 0;
     const rivalHp = Math.max(0, a.rivalHp - damage);
@@ -387,8 +409,24 @@ export const useGameStore = create<GameState>((set, get) => ({
     const won = rivalHp <= 0;
     const lost = playerHp <= 0;
     const name = move === "stomp" ? "Comet Stomp" : move === "tail_whip" ? "Leaf Whirl" : "Brave Brace";
+    const firstCrest = won && !s.progression.meadowCrestEarned;
+    const growthStage = firstCrest ? s.dinoStats.growthStage + 1 : s.dinoStats.growthStage;
+    if (firstCrest) {
+      queueMicrotask(() => {
+        get().pushEvent({ t: Date.now(), type: "arena_reward", reward: "meadow_crest", growthStage });
+        persistGame();
+      });
+    } else if (won) {
+      queueMicrotask(persistGame);
+    }
     return {
-      dinoStats: won ? { ...s.dinoStats, xp: s.dinoStats.xp + 15, happiness: 1 } : s.dinoStats,
+      dinoStats: won ? { ...s.dinoStats, xp: s.dinoStats.xp + 15, happiness: 1, growthStage } : s.dinoStats,
+      dinoScale: firstCrest ? Math.min(1.8, Math.max(s.dinoScale + .08, 1 + .08 * (growthStage - 1))) : s.dinoScale,
+      progression: won ? {
+        ...s.progression,
+        arenaWins: s.progression.arenaWins + 1,
+        meadowCrestEarned: true,
+      } : s.progression,
       adventure: {
         ...a,
         mode: won ? "victory" : lost ? "resolving" : "battle",
@@ -396,8 +434,8 @@ export const useGameStore = create<GameState>((set, get) => ({
         playerHp: lost ? 12 + a.heart : playerHp,
         rivalHp: lost ? 12 : rivalHp,
         turn: a.turn + 1,
-        quest: won ? "Follow the glowing tracks into Fernwood" : lost ? "Train and try again" : a.quest,
-        battleMessage: won ? "Mossback bows! You earned the Meadow Crest." : lost ? "Mossback helps you up. Train once more and try again!" : `${name}! Mossback answers with a gentle head bump.`,
+        quest: won ? "Take the Meadow Crest home to the ranch" : lost ? "Train and try again" : a.quest,
+        battleMessage: won ? (firstCrest ? `Mossback bows! Meadow Crest earned — your dino grew to stage ${growthStage}!` : "Mossback bows! Another arena win!") : lost ? "Mossback helps you up. Train once more and try again!" : `${name}! Mossback answers with a gentle head bump.`,
       },
     };
   }),
@@ -417,10 +455,25 @@ export const useGameStore = create<GameState>((set, get) => ({
   }),
 
   returnToRanch: () => set((s) => ({
-    adventure: { ...s.adventure, mode: "explore" },
+    adventure: { ...s.adventure, mode: "explore", quest: s.progression.meadowCrestEarned ? "Celebrate the Meadow Crest at the ranch fire" : s.adventure.quest },
     playerTarget: { ...HOME_SPAWN },
     moveSequenceId: s.moveSequenceId + 1,
   })),
+
+  celebrateCrestAtCamp: () => {
+    const s = get();
+    if (!s.progression.meadowCrestEarned) return;
+    set({
+      adventure: { ...s.adventure, quest: "Follow the glowing tracks into Fernwood" },
+      progression: { ...s.progression, campCrestCelebrations: s.progression.campCrestCelebrations + 1 },
+      dinoStats: { ...s.dinoStats, happiness: 1 },
+      dinoDirective: { mood: "excited", animation: "happy_jump", shouldSpeak: false },
+      playerTarget: { x: 4.2, y: 0, z: 8.4 },
+      moveSequenceId: s.moveSequenceId + 1,
+    });
+    get().pushEvent({ t: Date.now(), type: "camp_crest_celebration" });
+    persistGame();
+  },
 
   setCamp: (active, pos) => set({ campActive: active, campPos: pos }),
 
@@ -460,6 +513,7 @@ export const useGameStore = create<GameState>((set, get) => ({
     dinoScale: 1,
     dinoStats: { hunger: .8, cleanliness: .8, happiness: .9, xp: 0, growthStage: 1 },
     adventure: { chapter: 1, mode: "explore", quest: "Meet Pip at the training ring", trainingStars: 0, power: 1, agility: 1, heart: 1, playerHp: 12, rivalHp: 12, battleMessage: "A friendly challenger is waiting beyond the ranch!", turn: 0 },
+    progression: { arenaWins: 0, meadowCrestEarned: false, campCrestCelebrations: 0 },
     campActive: false,
     campPos: null,
     recentEvents: [],
@@ -480,12 +534,29 @@ export const useGameStore = create<GameState>((set, get) => ({
         dinoPos: { ...HOME_DINO_SPAWN },
         dinoStats: saved.dinoStats ?? s.dinoStats,
         adventure: saved.adventure ?? s.adventure,
+        progression: {
+          arenaWins: saved.progression?.arenaWins ?? 0,
+          meadowCrestEarned: saved.progression?.meadowCrestEarned ?? false,
+          campCrestCelebrations: saved.progression?.campCrestCelebrations ?? 0,
+        },
         dinoScale: saved.dinoScale ?? 1,
         campActive: saved.campActive ?? false,
         campPos: saved.campPos ?? null,
       }));
       return true;
     } catch { return false; }
+  },
+  deleteGame: (slot) => {
+    try {
+      localStorage.removeItem(`rawrcade_save_${slot}`);
+      localStorage.removeItem(`tucker_dino_save_${slot}`);
+    } catch {
+      // The slot screen will still reflect whatever storage allows.
+    }
+    if (get().activeSaveSlot === slot) {
+      get().startNewGame(slot);
+      set({ activeSaveSlot: null });
+    }
   },
 }));
 
@@ -500,6 +571,7 @@ export function persistGame() {
     dinoPos: s.dinoPos,
     dinoStats: s.dinoStats,
     adventure: s.adventure,
+    progression: s.progression,
     dinoScale: s.dinoScale,
     campActive: s.campActive,
     campPos: s.campPos,

@@ -3,6 +3,7 @@ import dynamic from "next/dynamic";
 import { useGameStore, persistGame } from "@/src/state/useGameStore";
 import { HUD } from "@/src/ui/HUD";
 import { useDayNightSync } from "@/src/systems/time/useDayNightSync";
+import { useGameAudio } from "@/src/systems/audio/useGameAudio";
 
 declare global {
   interface Window {
@@ -21,7 +22,10 @@ export function GameApp() {
   const scene = useGameStore((s) => s.scene);
   const startNewGame = useGameStore((s) => s.startNewGame);
   const loadGame = useGameStore((s) => s.loadGame);
+  const deleteGame = useGameStore((s) => s.deleteGame);
+  const activeSaveSlot = useGameStore((s) => s.activeSaveSlot);
   const [saveChosen, setSaveChosen] = useState(false);
+  const [showSaveManager, setShowSaveManager] = useState(false);
   const [slotInfo, setSlotInfo] = useState<Array<{ slot: number; exists: boolean; stage: number }>>([]);
   const [introBeat, setIntroBeat] = useState(0);
 
@@ -34,6 +38,14 @@ export function GameApp() {
       } catch { return { slot, exists: false, stage: 1 }; }
     }));
   }, []);
+
+  const refreshSlots = () => setSlotInfo([1, 2, 3].map((slot) => {
+    try {
+      const raw = localStorage.getItem(`rawrcade_save_${slot}`) ?? localStorage.getItem(`tucker_dino_save_${slot}`);
+      const saved = raw ? JSON.parse(raw) : null;
+      return { slot, exists: !!saved, stage: saved?.dinoStats?.growthStage ?? 1 };
+    } catch { return { slot, exists: false, stage: 1 }; }
+  }));
 
   useEffect(() => {
     if (scene !== "egg" || !saveChosen) return;
@@ -51,6 +63,7 @@ export function GameApp() {
 
   // Time sync + lighting
   useDayNightSync();
+  useGameAudio();
 
   // Voice, camera and cloud-brain loops are intentionally paused while the
   // tactile world and companion play loop are being developed.
@@ -104,13 +117,39 @@ export function GameApp() {
       <GameCanvas />
       <div className="overlay">
         {saveChosen && <HUD />}
+        {saveChosen && !showSaveManager && <button className="save-manager-button" onClick={() => { refreshSlots(); setShowSaveManager(true); }}>Save files</button>}
+        {showSaveManager && (
+          <div className="save-screen">
+            <div className="save-card">
+              <div className="save-title"><span>🗂️</span><div><small>TESTING TOOLS</small><strong>Save files</strong></div></div>
+              <p>Delete a slot to start fresh.</p>
+              <div className="save-slots">
+                {slotInfo.map((info) => (
+                  <div className="save-delete-row" key={info.slot}>
+                    <span><strong>Adventure {info.slot}</strong><small>{info.exists ? `Dino growth stage ${info.stage}` : "Empty slot"}</small></span>
+                    <button disabled={!info.exists} onClick={() => {
+                      if (!window.confirm(`Delete adventure ${info.slot}? This cannot be undone.`)) return;
+                      deleteGame(info.slot);
+                      refreshSlots();
+                      if (activeSaveSlot === info.slot) {
+                        setSaveChosen(false);
+                        setShowSaveManager(false);
+                      }
+                    }}>Delete</button>
+                  </div>
+                ))}
+              </div>
+              <button className="save-close" onClick={() => setShowSaveManager(false)}>Back</button>
+            </div>
+          </div>
+        )}
         {saveChosen && scene === "egg" && (
           <div className="story-dialogue">
             <span className="story-speaker">A RAWRCADE ADVENTURE</span>
             <strong>{introBeat < 1 ? "..." : introBeat < 2 ? "Whoa! Are these... dinosaur eggs?!" : "Which one do you want?"}</strong>
           </div>
         )}
-        {!saveChosen && (
+        {!saveChosen && !showSaveManager && (
           <div className="save-screen">
             <div className="save-card">
               <div className="save-title"><span>🦕</span><div><small>WELCOME TO</small><strong>rawrcade</strong></div></div>
@@ -127,6 +166,7 @@ export function GameApp() {
                   </button>
                 ))}
               </div>
+              <button className="save-close" onClick={() => { refreshSlots(); setShowSaveManager(true); }}>Manage saves</button>
             </div>
           </div>
         )}

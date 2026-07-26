@@ -111,6 +111,27 @@ function Heart({ index }: { index: number }) {
   );
 }
 
+function MeadowCrest() {
+  const crest = useRef<THREE.Group>(null);
+  useFrame((state) => {
+    if (!crest.current) return;
+    crest.current.rotation.y = Math.sin(state.clock.elapsedTime * 1.8) * .18;
+    crest.current.position.y = 1.42 + Math.sin(state.clock.elapsedTime * 2.6) * .035;
+  });
+  return (
+    <group ref={crest} position={[0, 1.42, .12]}>
+      <mesh rotation={[Math.PI / 2, 0, 0]} castShadow>
+        <cylinderGeometry args={[.24, .24, .07, 8]} />
+        <meshStandardMaterial color="#f6c94a" emissive="#d98c20" emissiveIntensity={.35} metalness={.55} roughness={.28} />
+      </mesh>
+      <mesh position={[0, .01, .055]} rotation-z={Math.PI / 4}>
+        <boxGeometry args={[.17, .17, .055]} />
+        <meshStandardMaterial color="#fff1a6" emissive="#ffc83d" emissiveIntensity={.7} metalness={.35} roughness={.22} />
+      </mesh>
+    </group>
+  );
+}
+
 export function BabyDino({
   position,
   scale,
@@ -129,6 +150,7 @@ export function BabyDino({
   const setDinoDirective = useGameStore((s) => s.setDinoDirective);
   const eggSelectedId = useGameStore((s) => s.eggSelectedId);
   const dayPhase = useGameStore((s) => s.dayPhase);
+  const meadowCrestEarned = useGameStore((s) => s.progression.meadowCrestEarned);
 
   const group = useRef<THREE.Group>(null);
   const posRef = useRef<THREE.Vector3>(new THREE.Vector3(storeDinoPos.x, storeDinoPos.y, storeDinoPos.z));
@@ -289,6 +311,7 @@ export function BabyDino({
   return (
     <group ref={group} scale={finalScale} onPointerDown={(e) => { if (interactive) { e.stopPropagation(); openMenu(); } }}>
       <InteractionEffects />
+      {!controlled && meadowCrestEarned && <MeadowCrest />}
       <AssetBoundary fallback={<FallbackDinoBody />}>
         <Suspense fallback={<FallbackDinoBody />}>
           <AnimatedDinosaur

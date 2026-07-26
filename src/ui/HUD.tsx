@@ -1,8 +1,9 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
-import { useGameStore, type BattleMove } from "@/src/state/useGameStore";
+import { persistGame, useGameStore, type BattleMove } from "@/src/state/useGameStore";
 import { RadialMenu } from "@/src/ui/RadialMenu";
+import { AudioControls } from "@/src/ui/AudioControls";
 
 export function HUD() {
   const scene = useGameStore((s) => s.scene);
@@ -17,6 +18,10 @@ export function HUD() {
   const useBattleMove = useGameStore((s) => s.useBattleMove);
   const finishBattleResolution = useGameStore((s) => s.finishBattleResolution);
   const returnToRanch = useGameStore((s) => s.returnToRanch);
+  const progression = useGameStore((s) => s.progression);
+  const growthStage = useGameStore((s) => s.dinoStats.growthStage);
+  const celebrateCrestAtCamp = useGameStore((s) => s.celebrateCrestAtCamp);
+  const setDinoDirective = useGameStore((s) => s.setDinoDirective);
   const [battleLocked, setBattleLocked] = useState(false);
   const [victoryReady, setVictoryReady] = useState(false);
   const battleTimer = useRef<number | null>(null);
@@ -51,8 +56,19 @@ export function HUD() {
     battleTimer.current = window.setTimeout(() => setBattleLocked(false), 1650);
   };
 
+  const celebrateAtCamp = () => {
+    celebrateCrestAtCamp();
+    window.setTimeout(() => setDinoDirective({ mood: "calm", animation: "idle", shouldSpeak: false }), 2600);
+  };
+
+  const claimAndReturn = () => {
+    returnToRanch();
+    persistGame();
+  };
+
   return (
     <>
+      <AudioControls />
       {scene === "world" && adventure.mode !== "battle" && adventure.mode !== "resolving" && adventure.mode !== "victory" && (
         <div className="adventure-hud">
           <div className="chapter-pill">CHAPTER {adventure.chapter} · THE MEADOW CREST</div>
@@ -68,6 +84,7 @@ export function HUD() {
         <div className="action-dock">
           <button className="dock-button training-button" onClick={beginTraining}><span>🏕️</span><b>Train</b><small>Ranch ring</small></button>
           <button className="dock-button battle-button" disabled={adventure.trainingStars < 3} onClick={beginBattle}><span>⚔️</span><b>Battle</b><small>{adventure.trainingStars < 3 ? `${adventure.trainingStars}/3 stars` : "Meadow gate"}</small></button>
+          {progression.meadowCrestEarned && <button className="dock-button crest-button" onClick={celebrateAtCamp}><span>🏅</span><b>Crest Cheer</b><small>Ranch fire</small></button>}
         </div>
       )}
 
@@ -98,9 +115,12 @@ export function HUD() {
             <button disabled={battleLocked} onClick={() => playBattleMove("tail_whip")}><b>🍃 Leaf Whirl</b><small>Fast forest strike</small></button>
             <button disabled={battleLocked} onClick={() => playBattleMove("brace")}><b>🛡️ Brave Brace</b><small>Hold strong together</small></button>
           </div> : adventure.mode === "victory" ? (
-            <button className="victory-button" disabled={!victoryReady} onClick={returnToRanch}>
+            <div className="victory-reward">
+              <div className="crest-reveal"><span>🏅</span><div><small>REWARD UNLOCKED</small><strong>Meadow Crest</strong><b>Companion grew to stage {growthStage}</b></div></div>
+            <button className="victory-button" disabled={!victoryReady} onClick={claimAndReturn}>
               {victoryReady ? "Claim the Meadow Crest ✨" : "The Meadow Crest is awakening…"}
             </button>
+            </div>
           ) : (
             <div className="battle-resolving">Mossback helps your dino back up…</div>
           )}
@@ -109,6 +129,11 @@ export function HUD() {
       {scene === "world" && lastEvent?.type === "collectible_found" && (
         <div className="discovery-toast" key={`${lastEvent.id}-${lastEvent.t}`}>
           <span>✨</span><strong>{lastEvent.id.replaceAll("_", " ")}</strong>
+        </div>
+      )}
+      {scene === "world" && lastEvent?.type === "camp_crest_celebration" && (
+        <div className="reward-toast" key={lastEvent.t}>
+          <span>🏅</span><div><small>RANCH INTERACTION</small><strong>Crest Cheer!</strong></div>
         </div>
       )}
 
