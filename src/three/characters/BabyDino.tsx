@@ -132,6 +132,44 @@ function MeadowCrest() {
   );
 }
 
+function GrowthCosmetics({ stage, color }: { stage: number; color: string }) {
+  const aura = useRef<THREE.Group>(null);
+  useFrame((state) => {
+    if (!aura.current) return;
+    aura.current.rotation.y = state.clock.elapsedTime * .35;
+  });
+
+  return (
+    <group ref={aura}>
+      {stage >= 2 && (
+        <group position={[0, .93, -.08]}>
+          {[-.34, 0, .34].map((z, index) => (
+            <mesh key={z} position={[0, index === 1 ? .16 : .05, z]} rotation-x={-.18} castShadow>
+              <coneGeometry args={[.1 + index * .025, .34 + index * .08, 5]} />
+              <meshStandardMaterial color={color} emissive={color} emissiveIntensity={.32} roughness={.38} />
+            </mesh>
+          ))}
+        </group>
+      )}
+      {stage >= 3 && Array.from({ length: 6 }).map((_, index) => {
+        const angle = index / 6 * Math.PI * 2;
+        return (
+          <mesh key={index} position={[Math.cos(angle) * .62, .68 + index % 2 * .16, Math.sin(angle) * .62]}>
+            <octahedronGeometry args={[.055 + Math.min(stage, 6) * .006, 0]} />
+            <meshStandardMaterial color="#fff0a8" emissive={color} emissiveIntensity={.9} />
+          </mesh>
+        );
+      })}
+      {stage >= 4 && (
+        <mesh position-y={.05} rotation-x={-Math.PI / 2}>
+          <ringGeometry args={[.7, .77, 36]} />
+          <meshBasicMaterial color={color} transparent opacity={.45} depthWrite={false} />
+        </mesh>
+      )}
+    </group>
+  );
+}
+
 export function BabyDino({
   position,
   scale,
@@ -151,6 +189,8 @@ export function BabyDino({
   const eggSelectedId = useGameStore((s) => s.eggSelectedId);
   const dayPhase = useGameStore((s) => s.dayPhase);
   const meadowCrestEarned = useGameStore((s) => s.progression.meadowCrestEarned);
+  const dinoColor = useGameStore((s) => s.dinoColor);
+  const growthStage = useGameStore((s) => s.dinoStats.growthStage);
 
   const group = useRef<THREE.Group>(null);
   const posRef = useRef<THREE.Vector3>(new THREE.Vector3(storeDinoPos.x, storeDinoPos.y, storeDinoPos.z));
@@ -312,14 +352,17 @@ export function BabyDino({
     <group ref={group} scale={finalScale} onPointerDown={(e) => { if (interactive) { e.stopPropagation(); openMenu(); } }}>
       <InteractionEffects />
       {!controlled && meadowCrestEarned && <MeadowCrest />}
+      {!controlled && <GrowthCosmetics stage={growthStage} color={dinoColor} />}
       <AssetBoundary fallback={<FallbackDinoBody />}>
         <Suspense fallback={<FallbackDinoBody />}>
           <AnimatedDinosaur
             species={species}
             animation={modelAnimation}
             animationKey={animKey}
-            glowColor={dayPhase === "night" ? "#55ffd5" : undefined}
-            glowIntensity={dayPhase === "night" ? 0.12 : 0}
+            tintColor={dinoColor}
+            tintStrength={.2 + Math.min(growthStage, 5) * .018}
+            glowColor={dayPhase === "night" || growthStage >= 4 ? dinoColor : undefined}
+            glowIntensity={dayPhase === "night" ? .16 : growthStage >= 4 ? .1 : 0}
           />
         </Suspense>
       </AssetBoundary>

@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useRef, useState } from "react";
+import { useMemo } from "react";
 import { useFrame } from "@react-three/fiber";
 import { useGameStore } from "@/src/state/useGameStore";
 import { Vector3 } from "three";
@@ -9,9 +9,8 @@ type Item = { id: string; x: number; z: number };
 
 export function Collectibles() {
   const playerPos = useGameStore((s) => s.playerPos);
-  const pushEvent = useGameStore((s) => s.pushEvent);
-
-  const [collected, setCollected] = useState<Record<string, boolean>>({});
+  const collectedItems = useGameStore((s) => s.progression.collectedItems);
+  const collectItem = useGameStore((s) => s.collectItem);
 
   const items = useMemo<Item[]>(
     () => [
@@ -30,11 +29,10 @@ export function Collectibles() {
     p.set(playerPos.x, 0, playerPos.z);
 
     for (const item of items) {
-      if (collected[item.id]) continue;
+      if (collectedItems.includes(item.id)) continue;
       const d = p.distanceTo(new Vector3(item.x, 0, item.z));
       if (d < 1.2) {
-        setCollected((c) => ({ ...c, [item.id]: true }));
-        pushEvent({ t: Date.now(), type: "collectible_found", id: item.id });
+        collectItem(item.id);
       }
     }
   });
@@ -42,7 +40,7 @@ export function Collectibles() {
   return (
     <group>
       {items.map((item) => {
-        if (collected[item.id]) return null;
+        if (collectedItems.includes(item.id)) return null;
         return (
           <mesh key={item.id} position={[item.x, 0.2, item.z]} castShadow>
             <icosahedronGeometry args={[0.22, 0]} />

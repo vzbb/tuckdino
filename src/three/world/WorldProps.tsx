@@ -102,26 +102,26 @@ function BonfireModel() {
   return <primitive object={gltf.scene} />;
 }
 
-function Tree({ x, z, scale, rotation }: ScatterPoint) {
+function Tree({ x, z, scale, rotation, castsShadow }: ScatterPoint & { castsShadow: boolean }) {
   return (
     <group position={[x, 0, z]} scale={scale * 1.75} rotation-y={rotation}>
       <mesh position={[0, 0.1, 0]} receiveShadow>
         <cylinderGeometry args={[1.2, 1.6, 0.14, 18]} />
         <meshStandardMaterial color={"#3f5f39"} roughness={1} />
       </mesh>
-      <mesh position={[0, 0.95, 0]} castShadow>
+      <mesh position={[0, 0.95, 0]} castShadow={castsShadow}>
         <cylinderGeometry args={[0.14, 0.22, 1.9, 10]} />
         <meshStandardMaterial color={"#6e4b30"} roughness={0.96} />
       </mesh>
-      <mesh position={[0, 1.95, 0]} castShadow>
+      <mesh position={[0, 1.95, 0]} castShadow={castsShadow}>
         <coneGeometry args={[0.95, 1.4, 9]} />
         <meshStandardMaterial color={"#447d4b"} roughness={0.9} />
       </mesh>
-      <mesh position={[0, 2.6, 0.05]} castShadow>
+      <mesh position={[0, 2.6, 0.05]} castShadow={castsShadow}>
         <coneGeometry args={[0.72, 1.08, 9]} />
         <meshStandardMaterial color={"#63a861"} roughness={0.88} />
       </mesh>
-      <mesh position={[0.12, 2.08, 0.28]} castShadow>
+      <mesh position={[0.12, 2.08, 0.28]}>
         <sphereGeometry args={[0.18, 10, 10]} />
         <meshStandardMaterial color={"#8dd675"} emissive={"#7bcf68"} emissiveIntensity={0.2} roughness={0.8} />
       </mesh>
@@ -342,6 +342,68 @@ function TrainingGround() {
   );
 }
 
+function ZoneLandmarks() {
+  const crestEarned = useGameStore((s) => s.progression.meadowCrestEarned);
+  const guide = useGameStore((s) => s.setMoveTarget);
+  const stoneTrail = [
+    [0, -5], [-1.2, -8], [-2.8, -11], [-4.2, -13.5],
+    [4, 2], [7, 0], [10, -2], [12, -4],
+    [5, 10], [9, 12], [13, 14], [17, 16],
+  ];
+  return (
+    <group>
+      {stoneTrail.map(([x, z], index) => (
+        <mesh key={`trail-marker-${index}`} position={[x, .055, z]} rotation={[-Math.PI / 2, 0, index * .47]} scale={[.65 + index % 3 * .12, .42, 1]} receiveShadow raycast={() => {}}>
+          <circleGeometry args={[1, 12]} />
+          <meshStandardMaterial color={index > 7 ? "#8bb86f" : "#d2c18e"} roughness={1} />
+        </mesh>
+      ))}
+
+      <group position={[13, 0, -4]}>
+        {Array.from({ length: 7 }).map((_, index) => {
+          const angle = index / 7 * Math.PI * 2;
+          return <mesh key={index} position={[Math.cos(angle) * 2.7, .35, Math.sin(angle) * 2.7]} rotation={[0, -angle, .12]} castShadow>
+            <dodecahedronGeometry args={[.48 + index % 2 * .18, 0]} />
+            <meshStandardMaterial color={index % 2 ? "#7cb3c4" : "#8c82bd"} emissive={index % 2 ? "#347b94" : "#68579e"} emissiveIntensity={.17} roughness={.55} />
+          </mesh>;
+        })}
+      </group>
+
+      <group position={[-5, 0, -12]} rotation-y={.08}>
+        {[-1.8, -.6, .6, 1.8].map((x, index) => (
+          <mesh key={index} position={[x, .22, 0]} rotation={[0, 0, Math.PI / 2]} castShadow receiveShadow>
+            <cylinderGeometry args={[.14, .18, 2.1, 9]} />
+            <meshStandardMaterial color={index % 2 ? "#8d623e" : "#a87848"} roughness={1} />
+          </mesh>
+        ))}
+        <mesh position={[0, .62, -1.35]} castShadow><boxGeometry args={[2.8, .15, .55]} /><meshStandardMaterial color="#c79655" roughness={1} /></mesh>
+      </group>
+
+      <group position={[0, 0, -20]}>
+        {[-2.6, 2.6].map((x, index) => (
+          <group key={x} position={[x, 0, 0]}>
+            <mesh position={[0, 1.25, 0]} castShadow><cylinderGeometry args={[.16, .22, 2.5, 8]} /><meshStandardMaterial color="#654129" roughness={1} /></mesh>
+            <mesh position={[index ? -.34 : .34, 1.65, 0]} rotation-z={index ? -.18 : .18} castShadow><boxGeometry args={[.65, .9, .08]} /><meshStandardMaterial color={index ? "#d77955" : "#e9b94f"} roughness={.9} /></mesh>
+          </group>
+        ))}
+        <mesh position={[0, 2.35, 0]} castShadow><boxGeometry args={[5.5, .28, .34]} /><meshStandardMaterial color="#754c2e" roughness={1} /></mesh>
+      </group>
+
+      <group position={[18, 0, 16]} onPointerDown={(event) => { event.stopPropagation(); if (crestEarned) guide({ x: 18, y: 0, z: 16 }); }}>
+        {[-2.2, 2.2].map((x, index) => (
+          <group key={x} position={[x, 0, 0]} scale={1.25 + index * .1}>
+            <mesh position={[0, 1.35, 0]} castShadow><cylinderGeometry args={[.28, .4, 2.7, 9]} /><meshStandardMaterial color="#594331" roughness={1} /></mesh>
+            <mesh position={[0, 3, 0]} castShadow><icosahedronGeometry args={[1.35, 1]} /><meshStandardMaterial color={crestEarned ? "#3f8b5d" : "#657260"} roughness={.9} /></mesh>
+          </group>
+        ))}
+        <mesh position={[0, 2.65, 0]} rotation-z={.03} castShadow><boxGeometry args={[4.6, .34, .42]} /><meshStandardMaterial color="#63472e" roughness={1} /></mesh>
+        <mesh position={[0, 2.72, .25]} castShadow><boxGeometry args={[2.1, .75, .12]} /><meshStandardMaterial color={crestEarned ? "#d8bf69" : "#8b8c72"} roughness={.9} /></mesh>
+        {crestEarned && <pointLight position={[0, 2.5, 1]} color="#91ff9c" intensity={1.2} distance={8} />}
+      </group>
+    </group>
+  );
+}
+
 export function WorldProps() {
   const treePoints = useMemo(
     () => makeScatter(42, 42, 15, 9125, [{ x: 0, z: -25, radius: 12 }]),
@@ -362,6 +424,7 @@ export function WorldProps() {
       <MeadowStructure />
       <HomeRanch />
       <TrainingGround />
+      <ZoneLandmarks />
 
       <group position={[-5.2, 0, 9.8]} rotation-y={0.45} scale={0.32}>
         <AssetBoundary fallback={<FallbackTent />}>
@@ -391,11 +454,11 @@ export function WorldProps() {
 
       {flowerPoints.map((point, i) => (
         <group key={`flower-${i}`} position={[-2 + point.x, 0.02, 10 + point.z]} rotation-y={point.rotation} scale={point.scale}>
-          <mesh castShadow>
+          <mesh>
             <cylinderGeometry args={[0.015, 0.015, 0.18, 6]} />
             <meshStandardMaterial color={"#4e8c4f"} roughness={1} />
           </mesh>
-          <mesh position={[0, 0.14, 0]} castShadow>
+          <mesh position={[0, 0.14, 0]}>
             <coneGeometry args={[0.07, 0.12, 6]} />
             <meshStandardMaterial color={i % 3 === 0 ? "#ffd1e8" : i % 3 === 1 ? "#b6f0ff" : "#fff2b3"} roughness={0.82} />
           </mesh>
@@ -403,7 +466,7 @@ export function WorldProps() {
       ))}
 
       {treePoints.map((point, i) => (
-        <Tree key={`tree-${i}`} {...point} />
+        <Tree key={`tree-${i}`} {...point} castsShadow={Math.hypot(point.x, point.z) < 27} />
       ))}
 
       <Campfire />
@@ -413,7 +476,6 @@ export function WorldProps() {
           key={`camp-pebble-${i}`}
           position={[HOME_FIRE.x + point.x * 0.35, 0.06, HOME_FIRE.z + point.z * 0.35]}
           rotation-y={point.rotation}
-          castShadow
           receiveShadow
         >
           <dodecahedronGeometry args={[0.12 + (i % 3) * 0.05, 0]} />

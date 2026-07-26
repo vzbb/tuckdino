@@ -1,7 +1,16 @@
 "use client";
 
 import { useMemo } from "react";
-import { useGameStore } from "@/src/state/useGameStore";
+import { persistGame, useGameStore } from "@/src/state/useGameStore";
+
+const DINO_PALETTES = [
+  { name: "Lagoon", color: "#16d8c5" },
+  { name: "Mango", color: "#ff9b35" },
+  { name: "Berry", color: "#b765f3" },
+  { name: "Comet", color: "#4e8cff" },
+  { name: "Rose", color: "#ff5f8f" },
+  { name: "Jungle", color: "#55c944" },
+] as const;
 
 function ActionButton({
   emoji,
@@ -46,6 +55,8 @@ export function RadialMenu() {
   const close = useGameStore((s) => s.closeRadialMenu);
   const apply = useGameStore((s) => s.applyDinoAction);
   const campActive = useGameStore((s) => s.campActive);
+  const dinoColor = useGameStore((s) => s.dinoColor);
+  const setDinoColor = useGameStore((s) => s.setDinoColor);
 
 
   const actions = useMemo(
@@ -157,6 +168,33 @@ export function RadialMenu() {
                 }}
               />
             ))}
+          </div>
+
+          <div style={{ marginTop: 16, padding: 12, borderRadius: 16, background: "rgba(255,255,255,.06)" }}>
+            <div style={{ marginBottom: 8, color: "rgba(255,255,255,.78)", fontSize: 11, fontWeight: 900, letterSpacing: 1 }}>
+              COMPANION COLORS
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(6,1fr)", gap: 7 }}>
+              {DINO_PALETTES.map((palette) => (
+                <button
+                  key={palette.name}
+                  aria-label={`${palette.name} color`}
+                  title={palette.name}
+                  onClick={() => {
+                    setDinoColor(palette.color);
+                    queueMicrotask(persistGame);
+                  }}
+                  style={{
+                    height: 34,
+                    borderRadius: 10,
+                    border: dinoColor === palette.color ? "3px solid white" : "2px solid rgba(255,255,255,.25)",
+                    background: palette.color,
+                    boxShadow: dinoColor === palette.color ? `0 0 18px ${palette.color}` : "none",
+                    cursor: "pointer",
+                  }}
+                />
+              ))}
+            </div>
           </div>
 
           <div style={{ 

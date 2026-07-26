@@ -1,4 +1,27 @@
 import { create } from "zustand";
+import {
+  DEFAULT_TRAINING_LEDGER,
+  finishSpar,
+  normalizeTrainingLedger,
+  restTrainingDay,
+  sparDifficulty,
+  spendTrainingSession,
+  trainingBlockReason,
+  type TrainingLedger,
+} from "@/src/systems/training/trainingProgression";
+import { WORLD_ZONES } from "@/src/world/worldZones";
+import {
+  resolveEncounterTurn,
+  startEncounter,
+  type CompanionMove,
+  type EncounterState,
+} from "@/src/systems/combat/encounterEngine";
+import {
+  awardEncounter,
+  EMPTY_ENCOUNTER_PROGRESS,
+  type EncounterProgress,
+} from "@/src/systems/combat/encounterProgress";
+import { ENEMY_SPAWNS, getEnemySpecies } from "@/src/world/enemies/enemyCatalog";
 
 export type Vec3 = { x: number; y: number; z: number };
 
@@ -50,13 +73,16 @@ export type GameEvent =
   | { t: number; type: "egg_hatched" }
   | { t: number; type: "tap_move"; target: Vec3 }
   | { t: number; type: "dino_action"; action: DinoAction }
-  | { t: number; type: "collectible_found"; id: string }
+  | { t: number; type: "collectible_found"; id: string; treats?: number; xp?: number }
   | { t: number; type: "dino_investigate"; targetId: string }
   | { t: number; type: "arena_reward"; reward: "meadow_crest"; growthStage: number }
   | { t: number; type: "camp_crest_celebration" }
   | { t: number; type: "arena_started" }
   | { t: number; type: "training_completed"; stat: "power" | "agility" | "heart" }
-  | { t: number; type: "battle_move"; move: BattleMove };
+  | { t: number; type: "battle_move"; move: BattleMove }
+  | { t: number; type: "zone_discovered"; zoneId: string }
+  | { t: number; type: "world_encounter_started"; spawnId: string }
+  | { t: number; type: "world_encounter_won"; spawnId: string; boss: boolean };
 
 type GameState = {
   activeSaveSlot: number | null;
@@ -102,9 +128,17 @@ type GameState = {
     arenaWins: number;
     meadowCrestEarned: boolean;
     campCrestCelebrations: number;
+    training: TrainingLedger;
+    encounters: EncounterProgress;
+    defeatedEnemyAt: Record<string, number>;
+    collectedItems: string[];
   };
+  activeEncounter: EncounterState | null;
+  activeEnemySpawnId: string | null;
   dinoDirective: DinoDirective;
   radialMenuOpen: boolean;
+  mapOpen: boolean;
+  discoveredZones: string[];
 
   // World Context
   interestPoints: InterestPoint[];
@@ -155,6 +189,9 @@ type GameState = {
 
   openRadialMenu: () => void;
   closeRadialMenu: () => void;
+  setMapOpen: (open: boolean) => void;
+  discoverZone: (zoneId: string) => void;
+  collectItem: (id: string) => void;
 
   applyDinoAction: (action: DinoAction) => void;
   beginTraining: () => void;
@@ -164,6 +201,10 @@ type GameState = {
   finishBattleResolution: () => void;
   returnToRanch: () => void;
   celebrateCrestAtCamp: () => void;
+  startWorldEncounter: (spawnId: string) => void;
+  playWorldEncounterMove: (move: CompanionMove) => void;
+  retreatWorldEncounter: () => void;
+  closeWorldEncounter: () => void;
 
   setCamp: (active: boolean, pos: Vec3 | null) => void;
 
@@ -195,6 +236,10 @@ const defaultDirective: DinoDirective = {
 
 const HOME_SPAWN: Vec3 = { x: 0, y: 0, z: -2 };
 const HOME_DINO_SPAWN: Vec3 = { x: 1.5, y: 0, z: 0.2 };
+const isNearZone = (player: Vec3, zoneId: string) => {
+  const zone = WORLD_ZONES.find((candidate) => candidate.id === zoneId);
+  return !!zone && Math.hypot(player.x - zone.position.x, player.z - zone.position.z) <= zone.radius;
+};
 
 export const useGameStore = create<GameState>((set, get) => ({
   activeSaveSlot: null,
@@ -212,7 +257,7 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   dinoPos: { ...HOME_DINO_SPAWN },
   dinoScale: 1,
-  dinoColor: "#7affc8", // default minty green
+  dinoColor: "#16d8c5",
   dinoStats: {
     hunger: 0.8,
     cleanliness: 0.8,
@@ -237,9 +282,17 @@ export const useGameStore = create<GameState>((set, get) => ({
     arenaWins: 0,
     meadowCrestEarned: false,
     campCrestCelebrations: 0,
+    training: { ...DEFAULT_TRAINING_LEDGER },
+    encounters: { ...EMPTY_ENCOUNTER_PROGRESS },
+    defeatedEnemyAt: {},
+    collectedItems: [],
   },
+  activeEncounter: null,
+  activeEnemySpawnId: null,
   dinoDirective: defaultDirective,
   radialMenuOpen: false,
+  mapOpen: false,
+  discoveredZones: ["sunpatch_ranch"],
 
   interestPoints: [
     { id: "village_hut", pos: { x: -10, y: 0, z: -6 }, type: "village", label: "Cozy Hut" },
@@ -302,6 +355,29 @@ export const useGameStore = create<GameState>((set, get) => ({
 
   openRadialMenu: () => set({ radialMenuOpen: true }),
   closeRadialMenu: () => set({ radialMenuOpen: false }),
+  setMapOpen: (mapOpen) => set({ mapOpen, radialMenuOpen: false }),
+  discoverZone: (zoneId) => {
+    if (get().discoveredZones.includes(zoneId)) return;
+    set((s) => ({ discoveredZones: [...s.discoveredZones, zoneId] }));
+    get().pushEvent({ t: Date.now(), type: "zone_discovered", zoneId });
+    persistGame();
+  },
+  collectItem: (id) => {
+    const s = get();
+    if (s.progression.collectedItems.includes(id)) return;
+    const treats = 1;
+    const xp = 4;
+    set({
+      progression: {
+        ...s.progression,
+        collectedItems: [...s.progression.collectedItems, id],
+        training: { ...s.progression.training, supplies: s.progression.training.supplies + treats },
+      },
+      dinoStats: { ...s.dinoStats, xp: s.dinoStats.xp + xp },
+    });
+    get().pushEvent({ t: Date.now(), type: "collectible_found", id, treats, xp });
+    persistGame();
+  },
 
   applyDinoAction: (action) => {
     const s = get();
@@ -358,18 +434,27 @@ export const useGameStore = create<GameState>((set, get) => ({
     }
   },
 
-  beginTraining: () => set((s) => ({
-    adventure: { ...s.adventure, mode: "training", quest: "Earn 3 training stars" },
-    playerTarget: { x: -8, y: 0, z: 8 },
-    moveSequenceId: s.moveSequenceId + 1,
-  })),
+  beginTraining: () => set((s) => {
+    const zone = WORLD_ZONES.find((candidate) => candidate.id === "training_ring")!;
+    if (!isNearZone(s.playerPos, zone.id)) return {
+      adventure: { ...s.adventure, mode: "explore", quest: "Follow Pip's trail to the training ring" },
+      playerTarget: zone.position,
+      moveSequenceId: s.moveSequenceId + 1,
+    };
+    return { adventure: { ...s.adventure, mode: "training", quest: "Earn 3 training stars" } };
+  }),
 
   trainStat: (stat) => set((s) => {
+    const blocked = trainingBlockReason(s.progression.training, s.adventure[stat], s.dinoStats.growthStage);
+    if (blocked) {
+      return { adventure: { ...s.adventure, battleMessage: blocked } };
+    }
     const stars = Math.min(3, s.adventure.trainingStars + 1);
     const ready = stars >= 3;
     queueMicrotask(() => get().pushEvent({ t: Date.now(), type: "training_completed", stat }));
     return {
       dinoStats: { ...s.dinoStats, xp: s.dinoStats.xp + 4, happiness: clamp01(s.dinoStats.happiness + .04) },
+      progression: { ...s.progression, training: spendTrainingSession(s.progression.training) },
       adventure: {
         ...s.adventure,
         [stat]: s.adventure[stat] + 1,
@@ -383,28 +468,40 @@ export const useGameStore = create<GameState>((set, get) => ({
   }),
 
   beginBattle: () => {
-    set((s) => ({
+    set((s) => {
+      const zone = WORLD_ZONES.find((candidate) => candidate.id === "mossback_gate")!;
+      if (!isNearZone(s.playerPos, zone.id)) return {
+        adventure: { ...s.adventure, mode: "explore", quest: "Follow the trail to Mossback Meadow Gate" },
+        playerTarget: zone.position,
+        moveSequenceId: s.moveSequenceId + 1,
+      };
+      const rival = sparDifficulty(s.progression.arenaWins, s.adventure);
+      return {
       adventure: {
         ...s.adventure,
         mode: "battle",
-        quest: "Win your first friendly ranch battle",
+        quest: s.progression.meadowCrestEarned ? `Spar with ${rival.label}` : "Win your first friendly ranch battle",
         playerHp: 12 + s.adventure.heart,
-        rivalHp: 12,
+        rivalHp: rival.hp,
         turn: 0,
-        battleMessage: "Mossback wants to test your teamwork! Choose a move.",
+        battleMessage: `${rival.label} wants to test your teamwork! Choose a move.`,
       },
       playerTarget: null,
-    }));
-    get().pushEvent({ t: Date.now(), type: "arena_started" });
+      };
+    });
+    if (get().adventure.mode === "battle") {
+      get().pushEvent({ t: Date.now(), type: "arena_started" });
+    }
   },
 
   useBattleMove: (move) => set((s) => {
     if (s.adventure.mode !== "battle") return s;
     queueMicrotask(() => get().pushEvent({ t: Date.now(), type: "battle_move", move }));
     const a = s.adventure;
+    const rival = sparDifficulty(s.progression.arenaWins, a);
     const damage = move === "stomp" ? 2 + Math.floor(a.power / 2) : move === "tail_whip" ? 1 + Math.floor(a.agility / 2) : 0;
     const rivalHp = Math.max(0, a.rivalHp - damage);
-    const reply = rivalHp <= 0 ? 0 : Math.max(0, 3 - (move === "brace" ? 2 : 0) - Math.floor(a.heart / 4));
+    const reply = rivalHp <= 0 ? 0 : Math.max(1, rival.damage - (move === "brace" ? 2 : 0) - Math.floor(a.heart / 5));
     const playerHp = Math.max(0, a.playerHp - reply);
     const won = rivalHp <= 0;
     const lost = playerHp <= 0;
@@ -426,13 +523,14 @@ export const useGameStore = create<GameState>((set, get) => ({
         ...s.progression,
         arenaWins: s.progression.arenaWins + 1,
         meadowCrestEarned: true,
-      } : s.progression,
+        training: finishSpar(s.progression.training, true),
+      } : lost ? { ...s.progression, training: finishSpar(s.progression.training, false) } : s.progression,
       adventure: {
         ...a,
         mode: won ? "victory" : lost ? "resolving" : "battle",
         chapter: won ? 3 : a.chapter,
         playerHp: lost ? 12 + a.heart : playerHp,
-        rivalHp: lost ? 12 : rivalHp,
+        rivalHp: lost ? rival.hp : rivalHp,
         turn: a.turn + 1,
         quest: won ? "Take the Meadow Crest home to the ranch" : lost ? "Train and try again" : a.quest,
         battleMessage: won ? (firstCrest ? `Mossback bows! Meadow Crest earned — your dino grew to stage ${growthStage}!` : "Mossback bows! Another arena win!") : lost ? "Mossback helps you up. Train once more and try again!" : `${name}! Mossback answers with a gentle head bump.`,
@@ -463,26 +561,99 @@ export const useGameStore = create<GameState>((set, get) => ({
   celebrateCrestAtCamp: () => {
     const s = get();
     if (!s.progression.meadowCrestEarned) return;
+    const zone = WORLD_ZONES.find((candidate) => candidate.id === "sunpatch_ranch")!;
+    if (!isNearZone(s.playerPos, zone.id)) {
+      set({ adventure: { ...s.adventure, mode: "explore", quest: "Follow the trail to Sunpatch Ranch" }, playerTarget: zone.position, moveSequenceId: s.moveSequenceId + 1 });
+      return;
+    }
     set({
       adventure: { ...s.adventure, quest: "Follow the glowing tracks into Fernwood" },
       progression: { ...s.progression, campCrestCelebrations: s.progression.campCrestCelebrations + 1 },
       dinoStats: { ...s.dinoStats, happiness: 1 },
       dinoDirective: { mood: "excited", animation: "happy_jump", shouldSpeak: false },
-      playerTarget: { x: 4.2, y: 0, z: 8.4 },
-      moveSequenceId: s.moveSequenceId + 1,
+      playerTarget: null,
     });
     get().pushEvent({ t: Date.now(), type: "camp_crest_celebration" });
     persistGame();
   },
 
+  startWorldEncounter: (spawnId) => {
+    const spawn = ENEMY_SPAWNS.find((candidate) => candidate.id === spawnId);
+    if (!spawn || get().activeEncounter) return;
+    const species = getEnemySpecies(spawn.speciesId);
+    const stats = get().adventure;
+    set({
+      activeEnemySpawnId: spawnId,
+      activeEncounter: startEncounter(species, stats),
+      playerTarget: null,
+      mapOpen: false,
+    });
+    get().pushEvent({ t: Date.now(), type: "world_encounter_started", spawnId });
+  },
+
+  playWorldEncounterMove: (move) => {
+    const s = get();
+    const spawn = ENEMY_SPAWNS.find((candidate) => candidate.id === s.activeEnemySpawnId);
+    if (!spawn || !s.activeEncounter) return;
+    const species = getEnemySpecies(spawn.speciesId);
+    const result = resolveEncounterTurn(s.activeEncounter, species, s.adventure, move);
+    if (result.state.outcome !== "won" || !result.reward) {
+      set({ activeEncounter: result.state });
+      return;
+    }
+    const now = Date.now();
+    const encounters = awardEncounter(s.progression.encounters, spawn.id, result.reward);
+    const bossGrowth = species.temperament === "boss" ? 1 : 0;
+    set({
+      activeEncounter: result.state,
+      progression: {
+        ...s.progression,
+        encounters,
+        defeatedEnemyAt: { ...s.progression.defeatedEnemyAt, [spawn.id]: now },
+        training: {
+          ...s.progression.training,
+          supplies: s.progression.training.supplies + result.reward.trailTokens,
+        },
+      },
+      dinoStats: {
+        ...s.dinoStats,
+        xp: s.dinoStats.xp + result.reward.companionXp,
+        growthStage: s.dinoStats.growthStage + bossGrowth,
+        happiness: 1,
+      },
+      dinoScale: bossGrowth ? Math.min(1.8, s.dinoScale + .08) : s.dinoScale,
+    });
+    get().pushEvent({
+      t: now,
+      type: "world_encounter_won",
+      spawnId: spawn.id,
+      boss: species.temperament === "boss",
+    });
+    queueMicrotask(persistGame);
+  },
+
+  retreatWorldEncounter: () => set((s) => s.activeEncounter ? ({
+    activeEncounter: {
+      ...s.activeEncounter,
+      outcome: "retreated",
+      log: [...s.activeEncounter.log, "Your team retreats safely to the ranch trail."].slice(-6),
+    },
+  }) : {}),
+
+  closeWorldEncounter: () => set({
+    activeEncounter: null,
+    activeEnemySpawnId: null,
+  }),
+
   setCamp: (active, pos) => set({ campActive: active, campPos: pos }),
 
   setDayCycle: (phase, daylight) =>
-    set({
+    set((s) => ({
       dayPhase: phase,
       dayLight: daylight,
       lastTimeSyncAt: Date.now(),
-    }),
+      progression: { ...s.progression, training: restTrainingDay(s.progression.training) },
+    })),
 
   setCameraEnabled: (v) => set({ cameraEnabled: v }),
   setMicEnabled: (v) => set({ micEnabled: v }),
@@ -511,11 +682,24 @@ export const useGameStore = create<GameState>((set, get) => ({
     playerTarget: null,
     dinoPos: { ...HOME_DINO_SPAWN },
     dinoScale: 1,
+    dinoColor: "#31d7c5",
     dinoStats: { hunger: .8, cleanliness: .8, happiness: .9, xp: 0, growthStage: 1 },
     adventure: { chapter: 1, mode: "explore", quest: "Meet Pip at the training ring", trainingStars: 0, power: 1, agility: 1, heart: 1, playerHp: 12, rivalHp: 12, battleMessage: "A friendly challenger is waiting beyond the ranch!", turn: 0 },
-    progression: { arenaWins: 0, meadowCrestEarned: false, campCrestCelebrations: 0 },
+    progression: {
+      arenaWins: 0,
+      meadowCrestEarned: false,
+      campCrestCelebrations: 0,
+      training: { ...DEFAULT_TRAINING_LEDGER },
+      encounters: { ...EMPTY_ENCOUNTER_PROGRESS },
+      defeatedEnemyAt: {},
+      collectedItems: [],
+    },
+    activeEncounter: null,
+    activeEnemySpawnId: null,
     campActive: false,
     campPos: null,
+    mapOpen: false,
+    discoveredZones: ["sunpatch_ranch"],
     recentEvents: [],
   }),
   loadGame: (slot) => {
@@ -533,15 +717,24 @@ export const useGameStore = create<GameState>((set, get) => ({
         playerTarget: null,
         dinoPos: { ...HOME_DINO_SPAWN },
         dinoStats: saved.dinoStats ?? s.dinoStats,
+        dinoColor: saved.dinoColor ?? "#31d7c5",
         adventure: saved.adventure ?? s.adventure,
         progression: {
           arenaWins: saved.progression?.arenaWins ?? 0,
           meadowCrestEarned: saved.progression?.meadowCrestEarned ?? false,
           campCrestCelebrations: saved.progression?.campCrestCelebrations ?? 0,
+          training: normalizeTrainingLedger(saved.progression?.training),
+          encounters: saved.progression?.encounters ?? { ...EMPTY_ENCOUNTER_PROGRESS },
+          defeatedEnemyAt: saved.progression?.defeatedEnemyAt ?? {},
+          collectedItems: saved.progression?.collectedItems ?? [],
         },
+        activeEncounter: null,
+        activeEnemySpawnId: null,
         dinoScale: saved.dinoScale ?? 1,
         campActive: saved.campActive ?? false,
         campPos: saved.campPos ?? null,
+        mapOpen: false,
+        discoveredZones: saved.discoveredZones ?? ["sunpatch_ranch"],
       }));
       return true;
     } catch { return false; }
@@ -570,11 +763,13 @@ export function persistGame() {
     playerRotation: s.playerRotation,
     dinoPos: s.dinoPos,
     dinoStats: s.dinoStats,
+    dinoColor: s.dinoColor,
     adventure: s.adventure,
     progression: s.progression,
     dinoScale: s.dinoScale,
     campActive: s.campActive,
     campPos: s.campPos,
+    discoveredZones: s.discoveredZones,
   };
   try {
     localStorage.setItem(`rawrcade_save_${s.activeSaveSlot}`, JSON.stringify(save));

@@ -14,6 +14,13 @@ import { Camp } from "@/src/three/world/Camp";
 import { Collectibles } from "@/src/three/world/Collectibles";
 import { DinosaurArena } from "@/src/three/world/DinosaurArena";
 import { AssetBoundary } from "@/src/three/components/AssetBoundary";
+import { EnemyEncounterLayer } from "@/src/three/world/EnemyEncounterLayer";
+import { ForestAtmospherePass } from "@/src/three/world/ForestAtmospherePass";
+import { NpcWorldPass } from "@/src/three/world/NpcWorldPass";
+import { RanchSettlementPass } from "@/src/three/world/RanchSettlementPass";
+import { TerrainComposition } from "@/src/three/world/TerrainComposition";
+import { WorldBiomePass } from "@/src/three/world/WorldBiomePass";
+import { ZoneLandmarkPass } from "@/src/three/world/ZoneLandmarkPass";
 
 function CameraRig() {
   const camera = useThree((s) => s.camera);
@@ -101,8 +108,9 @@ function Controls() {
     const canvas = gl.domElement;
 
     const onPointerDown = (e: PointerEvent) => {
-      const mode = useGameStore.getState().adventure.mode;
-      if (mode === "battle" || mode === "resolving" || mode === "victory") return;
+      const game = useGameStore.getState();
+      const mode = game.adventure.mode;
+      if (game.activeEncounter || mode === "battle" || mode === "resolving" || mode === "victory") return;
       isDragging.current = true;
       lastX.current = e.clientX;
       lastY.current = e.clientY;
@@ -138,7 +146,7 @@ function Controls() {
 
     const onWheel = (e: WheelEvent) => {
       const mode = useGameStore.getState().adventure.mode;
-      if (mode === "battle" || mode === "resolving" || mode === "victory") return;
+      if (useGameStore.getState().activeEncounter || mode === "battle" || mode === "resolving" || mode === "victory") return;
       // Zoom in/out with mouse wheel
       const delta = e.deltaY * 0.001;
       const newZoom = clamp(useGameStore.getState().playerZoom + delta, 0.5, 2.0);
@@ -147,7 +155,7 @@ function Controls() {
 
     const onTouchMove = (e: TouchEvent) => {
       const mode = useGameStore.getState().adventure.mode;
-      if (mode === "battle" || mode === "resolving" || mode === "victory") return;
+      if (useGameStore.getState().activeEncounter || mode === "battle" || mode === "resolving" || mode === "victory") return;
       if (e.touches.length === 2) {
         // Pinch-to-zoom logic
         const t1 = e.touches[0];
@@ -197,9 +205,9 @@ function Lighting() {
 
   // Clamp and bias to keep it cozy
   const sun = clamp(dayLight, 0, 1);
-  const ambient = isNight ? 0.5 : 0.26 + sun * 0.42;
-  const dir = isNight ? 0.38 : 0.2 + sun * 1.0;
-  const hemiIntensity = isNight ? 0.6 : 0.22 + sun * 0.22;
+  const ambient = isNight ? 0.22 : 0.26 + sun * 0.42;
+  const dir = isNight ? 0.46 : 0.2 + sun * 1.0;
+  const hemiIntensity = isNight ? 0.28 : 0.22 + sun * 0.22;
 
   // Smoother sun position based on daylight
   // x: -8 (sunrise) to 8 (sunset), y: -1 (night) to 10 (noon), z: 6
@@ -209,9 +217,9 @@ function Lighting() {
 
   return (
     <>
-      <ambientLight intensity={ambient} color={isNight ? "#b7c8ff" : "#ffffff"} />
+      <ambientLight intensity={ambient} color={isNight ? "#839bd1" : "#ffffff"} />
       <hemisphereLight
-        args={[isNight ? "#c9dcff" : "#f5fbff", isNight ? "#35506b" : "#4f7548", hemiIntensity]}
+        args={[isNight ? "#7898d1" : "#f5fbff", isNight ? "#16293a" : "#4f7548", hemiIntensity]}
       />
       <directionalLight
         position={sunPos}
@@ -223,8 +231,8 @@ function Lighting() {
       />
       {isNight && (
         <>
-          <pointLight position={[0, 2.2, 0]} intensity={0.55} distance={18} color={"#9ebdff"} />
-          <pointLight position={[10, 1.8, 10]} intensity={0.8} distance={24} color={"#ffcc8a"} />
+          <pointLight position={[0, 2.2, 0]} intensity={0.38} distance={14} color={"#7f9bd8"} />
+          <pointLight position={[10, 2.4, 10]} intensity={1.25} distance={21} color={"#ffad5c"} />
         </>
       )}
     </>
@@ -234,6 +242,7 @@ function Lighting() {
 function WorldGround() {
   const setMoveTarget = useGameStore((s) => s.setMoveTarget);
   const adventureMode = useGameStore((s) => s.adventure.mode);
+  const encounterActive = useGameStore((s) => s.activeEncounter !== null);
   const isDragging = useRef(false);
   const startPos = useRef({ x: 0, y: 0 });
 
@@ -254,7 +263,7 @@ function WorldGround() {
       }}
       onPointerUp={(e) => {
         // Only move if we weren't dragging the camera
-        if (!isDragging.current && adventureMode !== "battle" && adventureMode !== "resolving" && adventureMode !== "victory") {
+        if (!isDragging.current && !encounterActive && adventureMode !== "battle" && adventureMode !== "resolving" && adventureMode !== "victory") {
           e.stopPropagation();
           setMoveTarget({ x: e.point.x, y: 0, z: e.point.z });
         }
@@ -284,11 +293,11 @@ export function WorldScene() {
   const adventureMode = useGameStore((s) => s.adventure.mode);
   const isNight = phase === "night";
 
-  const fogColor = isNight ? "#314c78" : phase === "morning" ? "#ffecdb" : phase === "evening" ? "#ffae80" : "#d0f0ff";
-  const fogIntensity = isNight ? 0.007 : 0.0055;
+  const fogColor = isNight ? "#17263e" : phase === "morning" ? "#ffecdb" : phase === "evening" ? "#ffae80" : "#d0f0ff";
+  const fogIntensity = isNight ? 0.011 : 0.0055;
 
   useEffect(() => {
-    scene.background = new Color(isNight ? "#536fa3" : phase === "morning" ? "#ffe8c9" : phase === "evening" ? "#ffb982" : "#aee8ff");
+    scene.background = new Color(isNight ? "#111d34" : phase === "morning" ? "#ffe8c9" : phase === "evening" ? "#ffb982" : "#aee8ff");
     return () => {
       scene.background = null;
     };
@@ -299,14 +308,22 @@ export function WorldScene() {
       <fogExp2 attach="fog" args={[fogColor, fogIntensity]} />
       
       {!isNight && <HorizonPanorama />}
-      {isNight && <Stars radius={80} depth={40} count={1800} factor={3.6} saturation={0.8} fade />}
+      {isNight && <Stars radius={80} depth={40} count={900} factor={2.5} saturation={0.65} fade />}
 
       <Lighting />
 
       <Controls />
       <WorldGround />
 
+      <TerrainComposition />
+      <ForestAtmospherePass />
+      <RanchSettlementPass />
+      <NpcWorldPass />
+      <ZoneLandmarkPass />
       <WorldProps />
+      <AssetBoundary fallback={null}>
+        <WorldBiomePass />
+      </AssetBoundary>
       {(adventureMode === "battle" || adventureMode === "resolving" || adventureMode === "victory") && (
         <AssetBoundary fallback={null}>
           <DinosaurArena />
@@ -314,6 +331,7 @@ export function WorldScene() {
       )}
       <Collectibles />
       <Camp />
+      <EnemyEncounterLayer />
 
       {adventureMode !== "battle" && adventureMode !== "resolving" && adventureMode !== "victory" && (
         <>

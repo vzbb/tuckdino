@@ -71,6 +71,8 @@ export type AnimatedDinosaurProps = {
   scale?: number;
   glowColor?: string;
   glowIntensity?: number;
+  tintColor?: string;
+  tintStrength?: number;
 };
 
 type PreparedModel = {
@@ -140,6 +142,8 @@ export function AnimatedDinosaur({
   scale = 1,
   glowColor,
   glowIntensity,
+  tintColor,
+  tintStrength = 0,
 }: AnimatedDinosaurProps) {
   const url = MODEL_URLS[species];
   const gltf = useGLTF(url);
@@ -148,8 +152,14 @@ export function AnimatedDinosaur({
   const { actions, names } = useAnimations(gltf.animations, animationRoot);
 
   useEffect(() => {
-    model.materials.forEach((material) => setGlow(material, glowColor, glowIntensity));
-  }, [glowColor, glowIntensity, model.materials]);
+    model.materials.forEach((material) => {
+      setGlow(material, glowColor, glowIntensity);
+      if (tintColor && tintStrength > 0 && material instanceof THREE.MeshStandardMaterial) {
+        material.color.lerp(new THREE.Color(tintColor), Math.min(.72, tintStrength));
+        material.needsUpdate = true;
+      }
+    });
+  }, [glowColor, glowIntensity, model.materials, tintColor, tintStrength]);
 
   useEffect(() => {
     const clipName = findClipName(names, animation);

@@ -79,6 +79,9 @@ function eventSound(event: GameEvent): string | null {
     case "arena_started": return sounds.sfx.charge;
     case "battle_move": return event.move === "stomp" ? sounds.sfx.stomp : event.move === "tail_whip" ? sounds.sfx.tail : sounds.sfx.brace;
     case "training_completed": return sounds.sfx.training;
+    case "zone_discovered": return sounds.sfx.trail;
+    case "world_encounter_started": return sounds.transitions.toBattle;
+    case "world_encounter_won": return event.boss ? sounds.sfx.celebration : sounds.sfx.reward;
     case "arena_reward": return sounds.sfx.reward;
     case "camp_crest_celebration": return sounds.sfx.celebration;
     case "dino_action": return event.action === "bathe" ? sounds.sfx.water : event.action === "camp" ? sounds.sfx.camp : event.action === "play" ? sounds.sfx.butterfly : null;
@@ -94,6 +97,7 @@ function eventSound(event: GameEvent): string | null {
 export function useGameAudio() {
   const scene = useGameStore((s) => s.scene);
   const mode = useGameStore((s) => s.adventure.mode);
+  const encounterActive = useGameStore((s) => s.activeEncounter !== null);
   const dayPhase = useGameStore((s) => s.dayPhase);
   const playerMoving = useGameStore((s) => !!s.playerTarget);
   const atRanch = useGameStore((s) => (s.playerPos.x - 4.2) ** 2 + (s.playerPos.z - 8.4) ** 2 < 110);
@@ -177,7 +181,7 @@ export function useGameAudio() {
     if (!unlocked) return;
     const track = scene !== "world" ? sounds.music.egg
       : mode === "training" ? sounds.music.training
-      : mode === "battle" ? sounds.music.battle
+      : mode === "battle" || encounterActive ? sounds.music.battle
       : mode === "victory" ? sounds.music.victory
       : mode === "resolving" ? sounds.music.setback
       : dayPhase === "night" ? sounds.music.night
@@ -186,7 +190,7 @@ export function useGameAudio() {
       : atRanch ? sounds.music.ranch
       : sounds.music.meadow;
     crossfade(music, track, settings.current.music);
-  }, [atRanch, crossfade, dayPhase, mode, nearCrystal, nearMushrooms, scene, unlocked]);
+  }, [atRanch, crossfade, dayPhase, encounterActive, mode, nearCrystal, nearMushrooms, scene, unlocked]);
 
   useEffect(() => {
     if (!unlocked) return;

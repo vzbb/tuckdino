@@ -4,6 +4,7 @@ import { useGameStore, persistGame } from "@/src/state/useGameStore";
 import { HUD } from "@/src/ui/HUD";
 import { useDayNightSync } from "@/src/systems/time/useDayNightSync";
 import { useGameAudio } from "@/src/systems/audio/useGameAudio";
+import { useWorldDiscovery } from "@/src/systems/world/useWorldDiscovery";
 
 declare global {
   interface Window {
@@ -64,6 +65,7 @@ export function GameApp() {
   // Time sync + lighting
   useDayNightSync();
   useGameAudio();
+  useWorldDiscovery();
 
   // Voice, camera and cloud-brain loops are intentionally paused while the
   // tactile world and companion play loop are being developed.
